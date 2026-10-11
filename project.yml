@@ -1,0 +1,19 @@
+# Optional: regenerate the Xcode project with XcodeGen (https://github.com/yonaskolb/XcodeGen)
+#   brew install xcodegen && xcodegen generate
+name: BreakBuddy
+options:
+  deploymentTarget:
+    macOS: "13.0"
+targets:
+  BreakBuddy:
+    type: application
+    platform: macOS
+    sources: [BreakBuddy]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.BreakBuddy
+        INFOPLIST_FILE: BreakBuddy/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BreakBuddy/BreakBuddy.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_VERSION: "5.0"

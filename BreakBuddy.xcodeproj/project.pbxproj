@@ -1,0 +1,267 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A6F6AD8EE17C598D08692BE9 /* BreakBuddyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC712CE54E7AEE4B458EEF1 /* BreakBuddyApp.swift */; };
+		D9A7D197421CDC2F3568C667 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 691A87125046248400AD3170 /* Models.swift */; };
+		8F4B3B5B0DA7B6B460D67D5D /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5F59C85D4C6AB31422513E /* MenuBarController.swift */; };
+		8082A1F3A35198DE4B3B0A06 /* ReminderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3AEEB439BB9844AF97F401 /* ReminderScheduler.swift */; };
+		BF245EF90880179F48D45A30 /* ReminderPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A2BC37BCE3ECF0AAB809767 /* ReminderPanelController.swift */; };
+		2A965D1514805C58F7A9616B /* ReminderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA345527EA00780C343293A /* ReminderView.swift */; };
+		3E6B58702A273AA41AB4594D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E75A2A3300B3A2760963E272 /* SettingsView.swift */; };
+		3FF360A0EAD4313192C40AD2 /* CharacterStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B24541299F6CEEC58B7A886 /* CharacterStore.swift */; };
+		31B0FC94DF79DAD81AA944D8 /* SystemState.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF22F93C2FF24C9278EEDB25 /* SystemState.swift */; };
+		C5CACA5955A5E6CFC223889C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4EAC6C648890C94B1536B62B /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		9AC712CE54E7AEE4B458EEF1 /* BreakBuddyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakBuddyApp.swift; sourceTree = "<group>"; };
+		691A87125046248400AD3170 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		5D5F59C85D4C6AB31422513E /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		8C3AEEB439BB9844AF97F401 /* ReminderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderScheduler.swift; sourceTree = "<group>"; };
+		3A2BC37BCE3ECF0AAB809767 /* ReminderPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderPanelController.swift; sourceTree = "<group>"; };
+		AAA345527EA00780C343293A /* ReminderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderView.swift; sourceTree = "<group>"; };
+		E75A2A3300B3A2760963E272 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		5B24541299F6CEEC58B7A886 /* CharacterStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterStore.swift; sourceTree = "<group>"; };
+		EF22F93C2FF24C9278EEDB25 /* SystemState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemState.swift; sourceTree = "<group>"; };
+		4EAC6C648890C94B1536B62B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C4BAD57A5F14A80F149E166B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4657FC9E5E66808B3C3BADEF /* BreakBuddy.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BreakBuddy.entitlements; sourceTree = "<group>"; };
+		C646AFE5CD85D7DAC34A184E /* BreakBuddy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BreakBuddy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		60BC4B03B59AB7E62EDD5A66 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E0C1FCE8599CFD8B29DA77CF = {
+			isa = PBXGroup;
+			children = (
+				1FBA5ABDACC3E06E44EE5D3C /* BreakBuddy */,
+				AA456876F5B490EF67C72CA6 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1FBA5ABDACC3E06E44EE5D3C /* BreakBuddy */ = {
+			isa = PBXGroup;
+			children = (
+				9AC712CE54E7AEE4B458EEF1 /* BreakBuddyApp.swift */,
+				691A87125046248400AD3170 /* Models.swift */,
+				5D5F59C85D4C6AB31422513E /* MenuBarController.swift */,
+				8C3AEEB439BB9844AF97F401 /* ReminderScheduler.swift */,
+				3A2BC37BCE3ECF0AAB809767 /* ReminderPanelController.swift */,
+				AAA345527EA00780C343293A /* ReminderView.swift */,
+				E75A2A3300B3A2760963E272 /* SettingsView.swift */,
+				5B24541299F6CEEC58B7A886 /* CharacterStore.swift */,
+				EF22F93C2FF24C9278EEDB25 /* SystemState.swift */,
+				4EAC6C648890C94B1536B62B /* Assets.xcassets */,
+				C4BAD57A5F14A80F149E166B /* Info.plist */,
+				4657FC9E5E66808B3C3BADEF /* BreakBuddy.entitlements */,
+			);
+			path = BreakBuddy;
+			sourceTree = "<group>";
+		};
+		AA456876F5B490EF67C72CA6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C646AFE5CD85D7DAC34A184E /* BreakBuddy.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		42AEFBAE01D2DFD981F7DA7D /* BreakBuddy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 477DE7A21D855BA1F4EBD94D /* Build configuration list for PBXNativeTarget "BreakBuddy" */;
+			buildPhases = (
+				5BBC33093E0C71FE057F2561 /* Sources */,
+				60BC4B03B59AB7E62EDD5A66 /* Frameworks */,
+				DCF6836DBC2DAB2F0AB5E4FD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BreakBuddy;
+			productName = BreakBuddy;
+			productReference = C646AFE5CD85D7DAC34A184E /* BreakBuddy.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4DC844ABCCFC0D132D087C1C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = A7492CCDE30BE8F54F16B52E /* Build configuration list for PBXProject "BreakBuddy" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = E0C1FCE8599CFD8B29DA77CF;
+			productRefGroup = AA456876F5B490EF67C72CA6 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				42AEFBAE01D2DFD981F7DA7D /* BreakBuddy */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		DCF6836DBC2DAB2F0AB5E4FD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C5CACA5955A5E6CFC223889C /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5BBC33093E0C71FE057F2561 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A6F6AD8EE17C598D08692BE9 /* BreakBuddyApp.swift in Sources */,
+				D9A7D197421CDC2F3568C667 /* Models.swift in Sources */,
+				8F4B3B5B0DA7B6B460D67D5D /* MenuBarController.swift in Sources */,
+				8082A1F3A35198DE4B3B0A06 /* ReminderScheduler.swift in Sources */,
+				BF245EF90880179F48D45A30 /* ReminderPanelController.swift in Sources */,
+				2A965D1514805C58F7A9616B /* ReminderView.swift in Sources */,
+				3E6B58702A273AA41AB4594D /* SettingsView.swift in Sources */,
+				3FF360A0EAD4313192C40AD2 /* CharacterStore.swift in Sources */,
+				31B0FC94DF79DAD81AA944D8 /* SystemState.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B69466B536F8CE43B6356EC1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		64E1E1CBE1CA8E88EF3A838A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		626726E60BD1215F36719A30 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_ENTITLEMENTS = BreakBuddy/BreakBuddy.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BreakBuddy/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.BreakBuddy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E7D707A26E7F7B6FF52C489C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_ENTITLEMENTS = BreakBuddy/BreakBuddy.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BreakBuddy/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.BreakBuddy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A7492CCDE30BE8F54F16B52E /* Build configuration list for PBXProject "BreakBuddy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B69466B536F8CE43B6356EC1 /* Debug */,
+				64E1E1CBE1CA8E88EF3A838A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		477DE7A21D855BA1F4EBD94D /* Build configuration list for PBXNativeTarget "BreakBuddy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				626726E60BD1215F36719A30 /* Debug */,
+				E7D707A26E7F7B6FF52C489C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4DC844ABCCFC0D132D087C1C /* Project object */;
+}
