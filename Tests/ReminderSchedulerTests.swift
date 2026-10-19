@@ -196,13 +196,22 @@ final class ReminderSchedulerTests: XCTestCase {
     func testReminderWithoutOwnScheduleFollowsGlobalWorkingHours() {
         let (scheduler, settings) = makeScheduler()
         settings.workingHoursEnabled = true
-        settings.weekdaysOnly = false
+        settings.workDays = ReminderConfig.allDayNumbers
         settings.workStartMinutes = wrap(clockMinutes + 120) // global window is closed right now
         settings.workEndMinutes = wrap(clockMinutes + 180)
         scheduler.resetAll()
 
         advance(50 * 60, scheduler: scheduler)
         XCTAssertTrue(fired.isEmpty)
+    }
+
+    func testLegacyWeekdaysOnlySwitchIsMigratedToWorkDays() {
+        let defaults = makeDefaults()
+        defaults.set(false, forKey: "weekdaysOnly")
+        XCTAssertEqual(AppSettings(defaults: defaults).workDays, [1, 2, 3, 4, 5, 6, 7])
+
+        let fresh = AppSettings(defaults: makeDefaults())
+        XCTAssertEqual(fresh.workDays, [2, 3, 4, 5, 6])
     }
 
     func testOldSavedConfigWithoutScheduleFieldsStillLoads() throws {

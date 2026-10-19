@@ -87,6 +87,8 @@ struct ReminderConfig: Codable, Equatable {
 extension ReminderConfig {
     /// Monday to Friday as Calendar weekday numbers.
     static let weekdayNumbers = [2, 3, 4, 5, 6]
+    /// Every day of the week.
+    static let allDayNumbers = [1, 2, 3, 4, 5, 6, 7]
 
     /// Custom decoding so settings saved by older versions (without `stayUntilDone`)
     /// still load instead of being thrown away.
@@ -189,7 +191,8 @@ final class AppSettings: ObservableObject {
         static let workingHoursEnabled = "workingHoursEnabled"
         static let workStartMinutes = "workStartMinutes"
         static let workEndMinutes = "workEndMinutes"
-        static let weekdaysOnly = "weekdaysOnly"
+        static let weekdaysOnly = "weekdaysOnly" // legacy, only read to migrate to workDays
+        static let workDays = "workDays"
         static let respectFocus = "respectFocus"
         static let themeColor = "themeColor"
         static let reminderPosition = "reminderPosition"
@@ -220,8 +223,9 @@ final class AppSettings: ObservableObject {
     @Published var workEndMinutes: Int {
         didSet { defaults.set(workEndMinutes, forKey: Keys.workEndMinutes) }
     }
-    @Published var weekdaysOnly: Bool {
-        didSet { defaults.set(weekdaysOnly, forKey: Keys.weekdaysOnly) }
+    /// Days the global working hours apply to, as Calendar weekday numbers (Sunday = 1 ... Saturday = 7).
+    @Published var workDays: [Int] {
+        didSet { defaults.set(workDays, forKey: Keys.workDays) }
     }
 
     /// Skip reminders while Do Not Disturb / a Focus is active (best effort).
@@ -247,7 +251,13 @@ final class AppSettings: ObservableObject {
         self.workingHoursEnabled = defaults.object(forKey: Keys.workingHoursEnabled) as? Bool ?? false
         self.workStartMinutes = defaults.object(forKey: Keys.workStartMinutes) as? Int ?? 9 * 60
         self.workEndMinutes = defaults.object(forKey: Keys.workEndMinutes) as? Int ?? 18 * 60
-        self.weekdaysOnly = defaults.object(forKey: Keys.weekdaysOnly) as? Bool ?? true
+        if let saved = defaults.array(forKey: Keys.workDays) as? [Int] {
+            self.workDays = saved
+        } else {
+            // Older versions only had a "Weekdays only" switch (default on).
+            let weekdaysOnly = defaults.object(forKey: Keys.weekdaysOnly) as? Bool ?? true
+            self.workDays = weekdaysOnly ? ReminderConfig.weekdayNumbers : ReminderConfig.allDayNumbers
+        }
         self.respectFocus = defaults.object(forKey: Keys.respectFocus) as? Bool ?? true
         self.reminderPosition = defaults.string(forKey: Keys.reminderPosition)
             .flatMap(ReminderPosition.init(rawValue:)) ?? .bottomRight
@@ -354,7 +364,7 @@ final class AppSettings: ObservableObject {
     func isWithinWorkingHours(_ date: Date, calendar: Calendar = .current) -> Bool {
         guard workingHoursEnabled else { return true }
         let parts = calendar.dateComponents([.weekday, .hour, .minute], from: date)
-        if weekdaysOnly, let weekday = parts.weekday, weekday == 1 || weekday == 7 {
+        if let weekday = parts.weekday, !workDays.contains(weekday) {
             return false // Sunday = 1, Saturday = 7
         }
         let minutes = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)

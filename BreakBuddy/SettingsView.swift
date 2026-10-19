@@ -74,7 +74,7 @@ struct SettingsView: View {
                 if settings.workingHoursEnabled {
                     DatePicker("From", selection: timeBinding(\.workStartMinutes), displayedComponents: .hourAndMinute)
                     DatePicker("To", selection: timeBinding(\.workEndMinutes), displayedComponents: .hourAndMinute)
-                    Toggle("Weekdays only (Mon–Fri)", isOn: $settings.weekdaysOnly)
+                    DayPicker(days: $settings.workDays)
                 }
             }
 
@@ -232,11 +232,6 @@ private struct HexColorField: View {
 private struct ScheduleEditor: View {
     @Binding var config: ReminderConfig
 
-    /// Calendar weekday numbers in display order (Monday first).
-    private let days: [(number: Int, label: String)] = [
-        (2, "Mon"), (3, "Tue"), (4, "Wed"), (5, "Thu"), (6, "Fri"), (7, "Sat"), (1, "Sun")
-    ]
-
     private func timeBinding(_ keyPath: WritableKeyPath<ReminderConfig, Int>) -> Binding<Date> {
         Binding(
             get: {
@@ -251,28 +246,49 @@ private struct ScheduleEditor: View {
         )
     }
 
-    private func dayBinding(_ number: Int) -> Binding<Bool> {
+    var body: some View {
+        DatePicker("From", selection: timeBinding(\.scheduleStartMinutes), displayedComponents: .hourAndMinute)
+        DatePicker("To", selection: timeBinding(\.scheduleEndMinutes), displayedComponents: .hourAndMinute)
+        DayPicker(days: $config.scheduleDays)
+    }
+}
+
+/// Shared by the global working hours and each reminder's own schedule:
+/// Mon–Sun toggle buttons plus "Every day" / "Weekdays" shortcuts.
+private struct DayPicker: View {
+    @Binding var days: [Int]
+
+    /// Calendar weekday numbers in display order (Monday first).
+    private let allDays: [(number: Int, label: String)] = [
+        (2, "Mon"), (3, "Tue"), (4, "Wed"), (5, "Thu"), (6, "Fri"), (7, "Sat"), (1, "Sun")
+    ]
+
+    private func binding(_ number: Int) -> Binding<Bool> {
         Binding(
-            get: { config.scheduleDays.contains(number) },
+            get: { days.contains(number) },
             set: { isOn in
-                var set = Set(config.scheduleDays)
+                var set = Set(days)
                 if isOn { set.insert(number) } else { set.remove(number) }
-                config.scheduleDays = set.sorted()
+                days = set.sorted()
             }
         )
     }
 
     var body: some View {
-        DatePicker("From", selection: timeBinding(\.scheduleStartMinutes), displayedComponents: .hourAndMinute)
-        DatePicker("To", selection: timeBinding(\.scheduleEndMinutes), displayedComponents: .hourAndMinute)
         HStack(spacing: 4) {
-            ForEach(days, id: \.number) { day in
-                Toggle(day.label, isOn: dayBinding(day.number))
+            ForEach(allDays, id: \.number) { day in
+                Toggle(day.label, isOn: binding(day.number))
                     .toggleStyle(.button)
             }
         }
-        if config.scheduleDays.isEmpty {
-            Text("No days selected, so this reminder will never fire.")
+        HStack {
+            Button("Every day") { days = ReminderConfig.allDayNumbers }
+                .disabled(Set(days) == Set(ReminderConfig.allDayNumbers))
+            Button("Weekdays") { days = ReminderConfig.weekdayNumbers }
+                .disabled(Set(days) == Set(ReminderConfig.weekdayNumbers))
+        }
+        if days.isEmpty {
+            Text("No days selected, so reminders won't fire.")
                 .font(.caption)
                 .foregroundColor(.orange)
         }

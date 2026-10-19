@@ -65,7 +65,7 @@ Every reminder can also have its own character. Expand **Character for this remi
 
 ### Per-reminder schedules
 
-By default every reminder follows the global **Working hours** section. To give one reminder different times, switch on **Use its own schedule** inside that reminder: pick a From/To time and the days of the week (Mon to Sun). A reminder's countdown restarts when its window opens, and it stays quiet outside it.
+By default every reminder follows the global **Working hours** section. To give one reminder different times, switch on **Use its own schedule** inside that reminder: pick a From/To time and the days (Mon to Sun, with "Every day" and "Weekdays" shortcuts; the global working hours have the same day picker). A reminder's countdown restarts when its window opens, and it stays quiet outside it.
 
 ## 5. Build a release .app and add it to Login Items
 
