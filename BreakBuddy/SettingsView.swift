@@ -74,7 +74,7 @@ struct SettingsView: View {
                 if settings.workingHoursEnabled {
                     DatePicker("From", selection: timeBinding(\.workStartMinutes), displayedComponents: .hourAndMinute)
                     DatePicker("To", selection: timeBinding(\.workEndMinutes), displayedComponents: .hourAndMinute)
-                    DayPicker(days: $settings.workDays)
+                    DayPicker(days: $settings.workDays, tint: settings.themeColor)
                 }
             }
 
@@ -231,6 +231,7 @@ private struct HexColorField: View {
 /// From / To time pickers and a Mon-Sun day picker for one reminder's own schedule.
 private struct ScheduleEditor: View {
     @Binding var config: ReminderConfig
+    let tint: Color
 
     private func timeBinding(_ keyPath: WritableKeyPath<ReminderConfig, Int>) -> Binding<Date> {
         Binding(
@@ -249,7 +250,7 @@ private struct ScheduleEditor: View {
     var body: some View {
         DatePicker("From", selection: timeBinding(\.scheduleStartMinutes), displayedComponents: .hourAndMinute)
         DatePicker("To", selection: timeBinding(\.scheduleEndMinutes), displayedComponents: .hourAndMinute)
-        DayPicker(days: $config.scheduleDays)
+        DayPicker(days: $config.scheduleDays, tint: tint)
     }
 }
 
@@ -257,6 +258,8 @@ private struct ScheduleEditor: View {
 /// Mon–Sun toggle buttons plus "Every day" / "Weekdays" shortcuts.
 private struct DayPicker: View {
     @Binding var days: [Int]
+    /// The theme colour; selected days use a darker shade of it.
+    let tint: Color
 
     /// Calendar weekday numbers in display order (Monday first).
     private let allDays: [(number: Int, label: String)] = [
@@ -288,7 +291,7 @@ private struct DayPicker: View {
                         .foregroundColor(isOn ? .white : .secondary)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(isOn ? Color.accentColor : Color.secondary.opacity(0.15))
+                                .fill(isOn ? tint.darkened() : Color.secondary.opacity(0.15))
                         )
                 }
                 .buttonStyle(.plain)
@@ -357,7 +360,7 @@ private struct ReminderSection: View {
 
                 Toggle("Use its own schedule", isOn: config.useOwnSchedule)
                 if config.wrappedValue.useOwnSchedule {
-                    ScheduleEditor(config: config)
+                    ScheduleEditor(config: config, tint: settings.themeColor)
                 } else if settings.workingHoursEnabled {
                     Text("Follows the working hours below.")
                         .font(.caption)
@@ -577,5 +580,20 @@ private struct CharacterSlotRow: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+// MARK: - Colour helper
+
+extension Color {
+    /// A darker shade of this colour (`amount` 0...1 blends towards black), so white text on it stays readable.
+    func darkened(by amount: Double = 0.35) -> Color {
+        guard let rgb = NSColor(self).usingColorSpace(.sRGB) else { return self }
+        let factor = CGFloat(max(0, min(1, 1 - amount)))
+        return Color(.sRGB,
+                     red: Double(rgb.redComponent * factor),
+                     green: Double(rgb.greenComponent * factor),
+                     blue: Double(rgb.blueComponent * factor),
+                     opacity: Double(rgb.alphaComponent))
     }
 }
