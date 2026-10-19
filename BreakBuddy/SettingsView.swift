@@ -66,6 +66,17 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Appearance") {
+                HStack {
+                    Text("Theme color")
+                    Spacer()
+                    HexColorField(color: $settings.themeColor)
+                    ColorPicker("Theme color", selection: $settings.themeColor, supportsOpacity: false)
+                        .labelsHidden()
+                }
+                Button("Reset to default") { settings.themeColor = AppSettings.defaultThemeColor }
+            }
+
             Section("General") {
                 Toggle("Play a sound with reminders", isOn: $settings.soundEnabled)
                 Toggle("Skip reminders during Do Not Disturb / Focus", isOn: $settings.respectFocus)
@@ -82,6 +93,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .tint(settings.themeColor)
         .frame(width: 540, height: 680)
     }
 
@@ -98,6 +110,46 @@ struct SettingsView: View {
                 settings[keyPath: keyPath] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
             }
         )
+    }
+}
+
+// MARK: - Hex color field
+
+/// Shows a color as "#RRGGBB" and lets the user type or paste a hex value.
+/// Invalid input is kept as typed (and flagged) until it parses or the field loses focus.
+private struct HexColorField: View {
+    @Binding var color: Color
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var isValid: Bool { AppSettings.color(fromHex: text) != nil }
+
+    var body: some View {
+        TextField("", text: $text)
+            .labelsHidden()
+            .textFieldStyle(.roundedBorder)
+            .font(.system(.body, design: .monospaced))
+            .frame(width: 90)
+            .focused($focused)
+            .foregroundColor(isValid || text.isEmpty ? .primary : .red)
+            .onAppear { text = "#" + AppSettings.hex(from: color) }
+            .onChange(of: text) { newValue in
+                if let parsed = AppSettings.color(fromHex: newValue),
+                   AppSettings.hex(from: parsed) != AppSettings.hex(from: color) {
+                    color = parsed
+                }
+            }
+            .onChange(of: color) { newColor in
+                // Picker changed: reflect it, unless the typed text already means this color.
+                let hex = AppSettings.hex(from: newColor)
+                if AppSettings.color(fromHex: text).map(AppSettings.hex(from:)) != hex {
+                    text = "#" + hex
+                }
+            }
+            .onChange(of: focused) { isFocused in
+                // Revert invalid text when leaving the field.
+                if !isFocused { text = "#" + AppSettings.hex(from: color) }
+            }
     }
 }
 

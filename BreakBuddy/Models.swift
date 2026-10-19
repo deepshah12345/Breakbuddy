@@ -9,6 +9,8 @@
 
 import Foundation
 import Combine
+import SwiftUI
+import AppKit
 
 // MARK: - ReminderType
 
@@ -114,7 +116,11 @@ final class AppSettings: ObservableObject {
         static let workEndMinutes = "workEndMinutes"
         static let weekdaysOnly = "weekdaysOnly"
         static let respectFocus = "respectFocus"
+        static let themeColor = "themeColor"
     }
+
+    /// Default theme: the green used by the Done button.
+    static let defaultThemeColor = Color(red: 0.30, green: 0.60, blue: 0.40)
 
     private let defaults: UserDefaults
 
@@ -146,6 +152,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(respectFocus, forKey: Keys.respectFocus) }
     }
 
+    /// Accent color for buttons and toggles in Settings and the reminder popup.
+    @Published var themeColor: Color {
+        didSet { defaults.set(AppSettings.hex(from: themeColor), forKey: Keys.themeColor) }
+    }
+
     /// `defaults` is injectable so unit tests can use an isolated suite.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -157,6 +168,29 @@ final class AppSettings: ObservableObject {
         self.workEndMinutes = defaults.object(forKey: Keys.workEndMinutes) as? Int ?? 18 * 60
         self.weekdaysOnly = defaults.object(forKey: Keys.weekdaysOnly) as? Bool ?? true
         self.respectFocus = defaults.object(forKey: Keys.respectFocus) as? Bool ?? true
+        self.themeColor = defaults.string(forKey: Keys.themeColor).flatMap(AppSettings.color(fromHex:))
+            ?? AppSettings.defaultThemeColor
+    }
+
+    // MARK: Theme color helpers
+
+    /// Encodes a color as "RRGGBB" (sRGB) for UserDefaults.
+    static func hex(from color: Color) -> String {
+        let ns = NSColor(color).usingColorSpace(.sRGB) ?? .systemGreen
+        let r = Int((ns.redComponent * 255).rounded())
+        let g = Int((ns.greenComponent * 255).rounded())
+        let b = Int((ns.blueComponent * 255).rounded())
+        return String(format: "%02X%02X%02X", r, g, b)
+    }
+
+    /// Parses "RRGGBB", also accepting a leading "#" and surrounding whitespace (for pasted values).
+    static func color(fromHex input: String) -> Color? {
+        var hex = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hex.hasPrefix("#") { hex.removeFirst() }
+        guard hex.count == 6, hex.allSatisfy(\.isHexDigit), let value = Int(hex, radix: 16) else { return nil }
+        return Color(red: Double((value >> 16) & 0xFF) / 255,
+                     green: Double((value >> 8) & 0xFF) / 255,
+                     blue: Double(value & 0xFF) / 255)
     }
 
     // MARK: Config access

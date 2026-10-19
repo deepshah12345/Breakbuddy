@@ -111,7 +111,7 @@ final class ReminderPanelController {
         current = reminder
         isDismissing = false
 
-        let model = ReminderViewModel(reminder: reminder, characters: characters)
+        let model = ReminderViewModel(reminder: reminder, characters: characters, themeColor: settings.themeColor)
         self.model = model
 
         let size = ReminderLayout.panelSize
