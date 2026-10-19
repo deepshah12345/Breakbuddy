@@ -277,8 +277,23 @@ private struct DayPicker: View {
     var body: some View {
         HStack(spacing: 4) {
             ForEach(allDays, id: \.number) { day in
-                Toggle(day.label, isOn: binding(day.number))
-                    .toggleStyle(.button)
+                let isOn = days.contains(day.number)
+                Button {
+                    binding(day.number).wrappedValue.toggle()
+                } label: {
+                    Text(day.label)
+                        .font(.caption.weight(isOn ? .bold : .regular))
+                        .frame(minWidth: 34)
+                        .padding(.vertical, 5)
+                        .foregroundColor(isOn ? .white : .secondary)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isOn ? Color.accentColor : Color.secondary.opacity(0.15))
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(day.label)
+                .accessibilityValue(isOn ? "selected" : "not selected")
             }
         }
         HStack {
