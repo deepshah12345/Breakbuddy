@@ -18,9 +18,9 @@ final class SettingsWindowController {
     private var window: NSWindow?
     private let settings: AppSettings
     private let characters: CharacterStore
-    private let onPreview: (ReminderType) -> Void
+    private let onPreview: (String) -> Void
 
-    init(settings: AppSettings, characters: CharacterStore, onPreview: @escaping (ReminderType) -> Void) {
+    init(settings: AppSettings, characters: CharacterStore, onPreview: @escaping (String) -> Void) {
         self.settings = settings
         self.characters = characters
         self.onPreview = onPreview
@@ -49,12 +49,24 @@ final class SettingsWindowController {
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var characters: CharacterStore
-    let onPreview: (ReminderType) -> Void
+    let onPreview: (String) -> Void
 
     var body: some View {
         Form {
-            ForEach(ReminderType.allCases) { type in
-                ReminderSection(type: type, settings: settings, onPreview: onPreview)
+            ForEach(settings.reminders) { reminder in
+                ReminderSection(reminderID: reminder.id, settings: settings,
+                                characters: characters, onPreview: onPreview)
+            }
+
+            Section {
+                Button {
+                    settings.addReminder()
+                } label: {
+                    Label("Add custom reminder", systemImage: "plus.circle.fill")
+                }
+                Text("Create your own reminders, each with its own interval, messages and character.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Section("Working hours") {
@@ -96,11 +108,11 @@ struct SettingsView: View {
                 LaunchAtLoginToggle()
             }
 
-            Section("Character") {
+            Section("Default character") {
                 ForEach(CharacterStore.Slot.allCases) { slot in
-                    CharacterSlotRow(slot: slot, characters: characters)
+                    CharacterSlotRow(slot: slot, reminderID: nil, characters: characters)
                 }
-                Text("Use transparent PNGs. Blink and wave are optional.")
+                Text("Used by every reminder that doesn't have its own character. Use transparent PNGs; blink and wave are optional.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -214,51 +226,119 @@ private struct HexColorField: View {
     }
 }
 
-// MARK: - One reminder type (enable, interval, messages)
+// MARK: - One reminder (enable, interval, messages, character)
 
 private struct ReminderSection: View {
-    let type: ReminderType
+    let reminderID: String
     @ObservedObject var settings: AppSettings
-    let onPreview: (ReminderType) -> Void
+    @ObservedObject var characters: CharacterStore
+    let onPreview: (String) -> Void
+
+    @State private var confirmDelete = false
 
     private var config: Binding<ReminderConfig> {
         Binding(
-            get: { settings.config(for: type) },
-            set: { settings.setConfig($0, for: type) }
+            get: { settings.config(for: reminderID) },
+            set: { settings.setConfig($0, for: reminderID) }
         )
     }
 
     var body: some View {
-        Section {
-            Toggle("Enabled", isOn: config.enabled)
+        // The reminder can disappear for a moment while it is being deleted.
+        if let definition = settings.reminder(id: reminderID) {
+            Section {
+                if !definition.isBuiltIn {
+                    customFields(for: definition)
+                }
 
-            HStack {
-                Text("Every")
-                Slider(
-                    value: Binding(
-                        get: { Double(config.wrappedValue.intervalMinutes) },
-                        set: { config.wrappedValue.intervalMinutes = Int($0) }
-                    ),
-                    in: 5...180,
-                    step: 5
+                Toggle("Enabled", isOn: config.enabled)
+
+                HStack {
+                    Text("Every")
+                    Slider(
+                        value: Binding(
+                            get: { Double(config.wrappedValue.intervalMinutes) },
+                            set: { config.wrappedValue.intervalMinutes = Int($0) }
+                        ),
+                        in: 5...180,
+                        step: 5
+                    )
+                    Text("\(config.wrappedValue.intervalMinutes) min")
+                        .monospacedDigit()
+                        .frame(width: 64, alignment: .trailing)
+                }
+                .disabled(!config.wrappedValue.enabled)
+
+                Toggle("Keep on screen until I tap Done", isOn: config.stayUntilDone)
+
+                MessageListEditor(
+                    initial: config.wrappedValue.messages,
+                    onChange: { config.wrappedValue.messages = $0 }
                 )
-                Text("\(config.wrappedValue.intervalMinutes) min")
-                    .monospacedDigit()
-                    .frame(width: 64, alignment: .trailing)
+
+                DisclosureGroup {
+                    ForEach(CharacterStore.Slot.allCases) { slot in
+                        CharacterSlotRow(slot: slot, reminderID: reminderID, characters: characters)
+                    }
+                    Text("Poses you don't set here use the default character.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } label: {
+                    HStack {
+                        Text("Character for this reminder")
+                        Spacer()
+                        Text(characters.hasAnyCustomImage(reminderID: reminderID) ? "Custom" : "Default")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                HStack {
+                    Button("Preview reminder") { onPreview(reminderID) }
+                    Spacer()
+                    if !definition.isBuiltIn {
+                        Button("Delete reminder", role: .destructive) { confirmDelete = true }
+                    }
+                }
+                .confirmationDialog(
+                    "Delete \"\(definition.name)\"?",
+                    isPresented: $confirmDelete,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete", role: .destructive) {
+                        characters.removeAllImages(forReminder: reminderID)
+                        settings.deleteReminder(reminderID)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This also removes this reminder's character images.")
+                }
+            } header: {
+                Label(definition.name.isEmpty ? "Untitled reminder" : "\(definition.name) reminder",
+                      systemImage: definition.symbolName)
             }
-            .disabled(!config.wrappedValue.enabled)
-
-            Toggle("Keep on screen until I tap Done", isOn: config.stayUntilDone)
-
-            MessageListEditor(
-                initial: config.wrappedValue.messages,
-                onChange: { config.wrappedValue.messages = $0 }
-            )
-
-            Button("Preview \(type.title.lowercased()) reminder") { onPreview(type) }
-        } header: {
-            Label("\(type.title) reminder", systemImage: type.symbolName)
         }
+    }
+
+    /// Name and icon, only editable for custom reminders.
+    @ViewBuilder
+    private func customFields(for definition: ReminderDefinition) -> some View {
+        TextField("Name", text: Binding(
+            get: { definition.name },
+            set: { settings.rename(reminderID, to: $0) }
+        ))
+
+        Picker("Icon", selection: Binding(
+            get: { definition.symbolName },
+            set: { settings.setSymbol($0, for: reminderID) }
+        )) {
+            ForEach(ReminderDefinition.symbolChoices, id: \.self) { name in
+                Label(name, systemImage: name)
+                    .labelStyle(.iconOnly)
+                    .tag(name)
+            }
+        }
+        .pickerStyle(.menu)
     }
 }
 
@@ -339,10 +419,15 @@ private struct LaunchAtLoginToggle: View {
 
 // MARK: - Character image picker row
 
+/// One pose (idle / blink / wave) for either a specific reminder (`reminderID` set)
+/// or the shared default character (`reminderID` nil).
 private struct CharacterSlotRow: View {
     let slot: CharacterStore.Slot
+    let reminderID: String?
     @ObservedObject var characters: CharacterStore
     @State private var errorMessage: String?
+
+    private var isCustom: Bool { characters.hasCustomImage(for: slot, reminderID: reminderID) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -351,15 +436,15 @@ private struct CharacterSlotRow: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.12)))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(slot.title)
-                Text(characters.hasCustomImage(for: slot) ? "Custom image" : "Built-in")
+                Text(reminderID == nil ? slot.title : slot.shortTitle)
+                Text(statusText)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             Spacer()
             Button("Choose…") { chooseImage() }
-            Button("Reset") { characters.resetCustomImage(for: slot) }
-                .disabled(!characters.hasCustomImage(for: slot))
+            Button("Reset") { characters.resetCustomImage(for: slot, reminderID: reminderID) }
+                .disabled(!isCustom)
         }
         .alert("Couldn't use that image", isPresented: Binding(
             get: { errorMessage != nil },
@@ -371,11 +456,16 @@ private struct CharacterSlotRow: View {
         }
     }
 
+    private var statusText: String {
+        if isCustom { return "Custom image" }
+        return reminderID == nil ? "Built-in" : "Using default character"
+    }
+
     @ViewBuilder
     private var preview: some View {
         // Reading `revision` makes this row redraw after an image changes.
         let _ = characters.revision
-        if let image = characters.image(for: slot) {
+        if let image = characters.image(for: slot, reminderID: reminderID) {
             Image(nsImage: image).resizable().scaledToFit().padding(4)
         } else {
             Text("None").font(.caption).foregroundColor(.secondary)
@@ -390,7 +480,7 @@ private struct CharacterSlotRow: View {
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try characters.importImage(from: url, slot: slot)
+            try characters.importImage(from: url, slot: slot, reminderID: reminderID)
         } catch {
             errorMessage = error.localizedDescription
         }

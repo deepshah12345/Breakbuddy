@@ -2,10 +2,16 @@
 //  CharacterStore.swift
 //  BreakBuddy
 //
-//  Supplies the character images. Lookup order for each slot:
-//    1. A custom PNG the user chose in Settings (stored in Application Support)
-//    2. The image in the asset catalog (character_idle / _blink / _wave)
-//    3. For "idle" only: a shape drawn in code, so there is always something to show
+//  Supplies the character images. Every reminder can have its own character.
+//  Lookup order for each pose ("slot") of a reminder:
+//    1. A custom PNG chosen for THAT reminder
+//    2. The shared default character's custom PNG (chosen under "Default character")
+//    3. The image in the asset catalog (character_idle / _blink / _wave)
+//    4. For "idle" only: a shape drawn in code, so there is always something to show
+//
+//  Files live in Application Support/BreakBuddy:
+//    character_<slot>.png                      shared default character
+//    reminders/<reminder id>/character_<slot>.png   one reminder's own character
 //
 
 import AppKit
@@ -26,6 +32,14 @@ final class CharacterStore: ObservableObject {
             case .wave: return "Wave (optional)"
             }
         }
+        /// Short label used for per-reminder characters (they always have a fallback).
+        var shortTitle: String {
+            switch self {
+            case .idle: return "Idle"
+            case .blink: return "Blink (optional)"
+            case .wave: return "Wave (optional)"
+            }
+        }
     }
 
     enum StoreError: LocalizedError {
@@ -40,10 +54,16 @@ final class CharacterStore: ObservableObject {
         }
     }
 
+    /// Cache key: which reminder (nil = shared default) and which pose.
+    private struct Key: Hashable {
+        let reminderID: String?
+        let slot: Slot
+    }
+
     /// Bumped whenever an image changes so SwiftUI views refresh.
     @Published private(set) var revision = 0
 
-    private var cache: [Slot: NSImage] = [:]
+    private var cache: [Key: NSImage] = [:]
     private let folder: URL
 
     init(fileManager: FileManager = .default) {
@@ -54,60 +74,95 @@ final class CharacterStore: ObservableObject {
 
     // MARK: Lookup
 
-    /// The image for a slot, or nil if the optional slot has nothing.
-    func image(for slot: Slot) -> NSImage? {
-        if let cached = cache[slot] { return cached }
+    /// The image to show for a pose. Pass a `reminderID` for a specific reminder, or
+    /// nil for the shared default character. Returns nil only for an optional pose
+    /// (blink / wave) that nothing provides.
+    func image(for slot: Slot, reminderID: String? = nil) -> NSImage? {
+        let key = Key(reminderID: reminderID, slot: slot)
+        if let cached = cache[key] { return cached }
 
         var result: NSImage?
-        if let custom = NSImage(contentsOf: fileURL(for: slot)) {
-            result = custom
+        if let id = reminderID, let own = NSImage(contentsOf: fileURL(for: slot, reminderID: id)) {
+            result = own
+        } else if let shared = NSImage(contentsOf: fileURL(for: slot, reminderID: nil)) {
+            result = shared
         } else if let bundled = NSImage(named: NSImage.Name(slot.assetName)) {
             result = bundled
         } else if slot == .idle {
             result = CharacterStore.drawnFallback()
         }
-        if let result = result { cache[slot] = result }
+        if let result = result { cache[key] = result }
         return result
     }
 
     /// The idle image is always available thanks to the drawn fallback.
-    func idleImage() -> NSImage {
-        image(for: .idle) ?? CharacterStore.drawnFallback()
+    func idleImage(reminderID: String? = nil) -> NSImage {
+        image(for: .idle, reminderID: reminderID) ?? CharacterStore.drawnFallback()
     }
 
-    func hasCustomImage(for slot: Slot) -> Bool {
-        FileManager.default.fileExists(atPath: fileURL(for: slot).path)
+    /// True if this exact reminder (or the shared default when nil) has its own custom file
+    /// for the pose, ignoring fallbacks.
+    func hasCustomImage(for slot: Slot, reminderID: String? = nil) -> Bool {
+        FileManager.default.fileExists(atPath: fileURL(for: slot, reminderID: reminderID).path)
+    }
+
+    /// True if the reminder has at least one custom image of its own.
+    func hasAnyCustomImage(reminderID: String) -> Bool {
+        Slot.allCases.contains { hasCustomImage(for: $0, reminderID: reminderID) }
     }
 
     // MARK: Changing images
 
     /// Copies the chosen image into Application Support (converted to PNG).
-    func importImage(from url: URL, slot: Slot) throws {
+    func importImage(from url: URL, slot: Slot, reminderID: String? = nil) throws {
         guard let image = NSImage(contentsOf: url),
               let tiff = image.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff),
               let png = rep.representation(using: .png, properties: [:]) else {
             throw StoreError.unreadableImage
         }
+        let destination = fileURL(for: slot, reminderID: reminderID)
         do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try png.write(to: fileURL(for: slot), options: .atomic)
+            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try png.write(to: destination, options: .atomic)
         } catch {
             throw StoreError.writeFailed(error.localizedDescription)
         }
         invalidate()
     }
 
-    /// Removes the custom image so the built-in one is used again.
-    func resetCustomImage(for slot: Slot) {
-        try? FileManager.default.removeItem(at: fileURL(for: slot))
+    /// Removes the custom image so the next fallback is used again.
+    func resetCustomImage(for slot: Slot, reminderID: String? = nil) {
+        try? FileManager.default.removeItem(at: fileURL(for: slot, reminderID: reminderID))
+        invalidate()
+    }
+
+    /// Deletes every image belonging to a reminder (called when a reminder is deleted).
+    func removeAllImages(forReminder reminderID: String) {
+        try? FileManager.default.removeItem(at: reminderFolder(for: reminderID))
         invalidate()
     }
 
     // MARK: Private
 
-    private func fileURL(for slot: Slot) -> URL {
-        folder.appendingPathComponent("\(slot.assetName).png")
+    /// Keeps ids safe for use as folder names.
+    private func safeName(_ id: String) -> String {
+        let cleaned = id.filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        return cleaned.isEmpty ? "reminder" : cleaned
+    }
+
+    private func reminderFolder(for reminderID: String) -> URL {
+        folder.appendingPathComponent("reminders", isDirectory: true)
+            .appendingPathComponent(safeName(reminderID), isDirectory: true)
+    }
+
+    private func fileURL(for slot: Slot, reminderID: String?) -> URL {
+        let name = "\(slot.assetName).png"
+        if let id = reminderID {
+            return reminderFolder(for: id).appendingPathComponent(name)
+        }
+        return folder.appendingPathComponent(name)
     }
 
     private func invalidate() {

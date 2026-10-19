@@ -6,6 +6,9 @@
 //  next-fire date with the clock. The clock and system state (idle / Focus) are
 //  injected so the logic can be unit tested without waiting for real time.
 //
+//  Reminders are identified by their `ReminderDefinition.id`, so the built-in
+//  Water / Break reminders and any number of custom ones are handled identically.
+//
 
 import Foundation
 import AppKit
@@ -43,8 +46,8 @@ final class ReminderScheduler: ObservableObject {
     private let system: SystemStateProviding
     private let now: () -> Date
 
-    private var nextFire: [ReminderType: Date] = [:]
-    private var appliedConfig: [ReminderType: ReminderConfig] = [:]
+    private var nextFire: [String: Date] = [:]
+    private var appliedConfig: [String: ReminderConfig] = [:]
     private var lastTick: Date
     private var wasInsideWorkingHours = true
 
@@ -79,7 +82,7 @@ final class ReminderScheduler: ObservableObject {
         RunLoop.main.add(tickTimer, forMode: .common) // keeps ticking while menus are open
         timer = tickTimer
 
-        // React to interval / enabled changes made in Settings.
+        // React to interval / enabled changes and added / deleted reminders.
         settings.objectWillChange
             .receive(on: DispatchQueue.main) // values are updated by the time we run
             .sink { [weak self] _ in self?.settingsDidChange() }
@@ -118,42 +121,42 @@ final class ReminderScheduler: ObservableObject {
 
     // MARK: - Public actions
 
-    /// Shows a reminder immediately (used by "Remind me now"); does not touch the schedule.
-    func remindNow(_ type: ReminderType) {
-        onFire?(makeReminder(type))
+    /// Shows a reminder immediately (used by "Remind me now" and Preview); does not touch the schedule.
+    func remindNow(_ reminderID: String) {
+        guard let reminder = makeReminder(reminderID) else { return }
+        onFire?(reminder)
     }
 
-    /// Postpones one reminder type.
-    func snooze(_ type: ReminderType, minutes: Int) {
-        nextFire[type] = now().addingTimeInterval(TimeInterval(minutes * 60))
+    /// Postpones one reminder.
+    func snooze(_ reminderID: String, minutes: Int) {
+        nextFire[reminderID] = now().addingTimeInterval(TimeInterval(minutes * 60))
     }
 
-    /// When the given type will next be due (nil if never scheduled).
-    func nextFireDate(for type: ReminderType) -> Date? { nextFire[type] }
+    /// When the given reminder will next be due (nil if never scheduled).
+    func nextFireDate(for reminderID: String) -> Date? { nextFire[reminderID] }
 
     /// Restarts every countdown from "now".
     func resetAll() {
         let current = now()
-        for type in ReminderType.allCases {
-            let config = settings.config(for: type)
-            appliedConfig[type] = config
-            nextFire[type] = current.addingTimeInterval(interval(of: config))
+        nextFire.removeAll()
+        appliedConfig.removeAll()
+        for reminder in settings.reminders {
+            appliedConfig[reminder.id] = reminder.config
+            nextFire[reminder.id] = current.addingTimeInterval(interval(of: reminder.config))
         }
         lastTick = current
         wasInsideWorkingHours = settings.isWithinWorkingHours(current)
     }
 
     /// Called after the Mac wakes from sleep.
-    /// - A reminder that came due while asleep is shown shortly after waking (one per type,
+    /// - A reminder that came due while asleep is shown shortly after waking (one per reminder,
     ///   never a pile of missed ones).
     /// - A reminder that was not yet due keeps its original time, so time already
     ///   counted before sleeping is not lost.
     func handleWake() {
         let current = now()
-        for type in ReminderType.allCases {
-            if let due = nextFire[type], due <= current {
-                nextFire[type] = current.addingTimeInterval(Constants.wakeGraceDelay)
-            }
+        for (id, due) in nextFire where due <= current {
+            nextFire[id] = current.addingTimeInterval(Constants.wakeGraceDelay)
         }
         lastTick = current
         // Don't let the "working hours just opened" restart wipe out the catch-up above.
@@ -185,9 +188,9 @@ final class ReminderScheduler: ObservableObject {
             return
         }
 
-        for type in ReminderType.allCases {
-            if let due = nextFire[type], due <= current {
-                evaluate(type, at: current)
+        for reminder in settings.reminders {
+            if let due = nextFire[reminder.id], due <= current {
+                evaluate(reminder.id, at: current)
             }
         }
     }
@@ -195,49 +198,68 @@ final class ReminderScheduler: ObservableObject {
     // MARK: - Private
 
     /// Decides what to do with a reminder that is due.
-    private func evaluate(_ type: ReminderType, at current: Date) {
-        let config = settings.config(for: type)
+    private func evaluate(_ id: String, at current: Date) {
+        let config = settings.config(for: id)
         let fullInterval = interval(of: config)
 
         guard config.enabled else {
-            nextFire[type] = current.addingTimeInterval(fullInterval)
+            nextFire[id] = current.addingTimeInterval(fullInterval)
             return
         }
         // User is away from the keyboard: skip this occurrence.
         if system.idleSeconds > Constants.idleThreshold {
-            nextFire[type] = current.addingTimeInterval(fullInterval)
+            nextFire[id] = current.addingTimeInterval(fullInterval)
             return
         }
         // Do Not Disturb / Focus: try again shortly rather than skipping a whole interval.
         if settings.respectFocus && system.isFocusModeActive {
-            nextFire[type] = current.addingTimeInterval(Constants.focusRetryInterval)
+            nextFire[id] = current.addingTimeInterval(Constants.focusRetryInterval)
             return
         }
 
-        nextFire[type] = current.addingTimeInterval(fullInterval)
-        onFire?(makeReminder(type))
+        nextFire[id] = current.addingTimeInterval(fullInterval)
+        if let reminder = makeReminder(id) {
+            onFire?(reminder)
+        }
     }
 
-    private func makeReminder(_ type: ReminderType) -> Reminder {
-        Reminder(type: type, message: settings.randomMessage(for: type), date: now())
+    private func makeReminder(_ id: String) -> Reminder? {
+        guard let definition = settings.reminder(id: id) else { return nil }
+        return Reminder(reminderID: id,
+                        name: definition.name,
+                        symbolName: definition.symbolName,
+                        message: settings.randomMessage(for: id),
+                        date: now())
     }
 
     private func interval(of config: ReminderConfig) -> TimeInterval {
         TimeInterval(max(1, config.intervalMinutes) * 60)
     }
 
-    /// Restart a countdown only when its interval/enabled flag actually changed.
+    /// Keeps the schedule in step with Settings:
+    /// - new reminders start their countdown now
+    /// - deleted reminders are forgotten
+    /// - a changed interval / enabled flag restarts that reminder's countdown
+    /// - changes to messages, names or icons leave countdowns alone
     private func settingsDidChange() {
         let current = now()
-        for type in ReminderType.allCases {
-            let config = settings.config(for: type)
-            if let old = appliedConfig[type],
+        let liveIDs = Set(settings.reminders.map(\.id))
+
+        for id in nextFire.keys where !liveIDs.contains(id) {
+            nextFire[id] = nil
+            appliedConfig[id] = nil
+        }
+
+        for reminder in settings.reminders {
+            let config = reminder.config
+            if let old = appliedConfig[reminder.id],
+               nextFire[reminder.id] != nil,
                old.intervalMinutes == config.intervalMinutes, old.enabled == config.enabled {
-                appliedConfig[type] = config // e.g. only the messages changed
+                appliedConfig[reminder.id] = config
                 continue
             }
-            appliedConfig[type] = config
-            nextFire[type] = current.addingTimeInterval(interval(of: config))
+            appliedConfig[reminder.id] = config
+            nextFire[reminder.id] = current.addingTimeInterval(interval(of: config))
         }
     }
 }

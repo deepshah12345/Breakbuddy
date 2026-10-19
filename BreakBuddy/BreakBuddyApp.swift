@@ -42,17 +42,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelController?.enqueue(reminder)
         }
         // Snooze button -> scheduler.
-        panelController.onSnooze = { [weak scheduler] type, minutes in
-            scheduler?.snooze(type, minutes: minutes)
+        panelController.onSnooze = { [weak scheduler] reminderID, minutes in
+            scheduler?.snooze(reminderID, minutes: minutes)
         }
 
         let settingsWindow = SettingsWindowController(
             settings: settings,
             characters: characters,
-            onPreview: { [weak scheduler] type in scheduler?.remindNow(type) }
+            onPreview: { [weak scheduler] reminderID in scheduler?.remindNow(reminderID) }
         )
         let menuBar = MenuBarController(
             scheduler: scheduler,
+            settings: settings,
             onOpenSettings: { [weak settingsWindow] in settingsWindow?.show() }
         )
 
