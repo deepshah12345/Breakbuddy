@@ -77,6 +77,19 @@ struct SettingsView: View {
                 Button("Reset to default") { settings.themeColor = AppSettings.defaultThemeColor }
             }
 
+            Section("Position") {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show character at")
+                        Text(settings.reminderPosition.title)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    PositionPicker(selection: $settings.reminderPosition, accent: settings.themeColor)
+                }
+            }
+
             Section("General") {
                 Toggle("Play a sound with reminders", isOn: $settings.soundEnabled)
                 Toggle("Skip reminders during Do Not Disturb / Focus", isOn: $settings.respectFocus)
@@ -110,6 +123,54 @@ struct SettingsView: View {
                 settings[keyPath: keyPath] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
             }
         )
+    }
+}
+
+// MARK: - Position picker
+
+/// A miniature screen with a 3x3 grid of spots; click one to place the character there.
+/// The center cell is unused (the popup would cover the middle of the screen).
+private struct PositionPicker: View {
+    @Binding var selection: ReminderPosition
+    let accent: Color
+
+    private static let grid: [[ReminderPosition?]] = [
+        [.topLeft, .topCenter, .topRight],
+        [.middleLeft, nil, .middleRight],
+        [.bottomLeft, .bottomCenter, .bottomRight]
+    ]
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ForEach(0..<3, id: \.self) { row in
+                HStack(spacing: 6) {
+                    ForEach(0..<3, id: \.self) { column in
+                        cell(Self.grid[row][column])
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3)))
+    }
+
+    @ViewBuilder
+    private func cell(_ position: ReminderPosition?) -> some View {
+        if let position {
+            let isSelected = position == selection
+            Button { selection = position } label: {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(isSelected ? accent : Color.secondary.opacity(0.25))
+                    .frame(width: 32, height: 22)
+            }
+            .buttonStyle(.plain)
+            .help(position.title)
+            .accessibilityLabel(position.title)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        } else {
+            Color.clear.frame(width: 32, height: 22)
+        }
     }
 }
 

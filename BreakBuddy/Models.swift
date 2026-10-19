@@ -65,6 +65,49 @@ enum ReminderType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// MARK: - ReminderPosition
+
+/// Screen corner where the character and bubble appear.
+enum ReminderPosition: String, CaseIterable, Identifiable {
+    case topLeft, topCenter, topRight
+    case middleLeft, middleRight
+    case bottomLeft, bottomCenter, bottomRight
+
+    enum Column { case left, center, right }
+    enum Row { case top, middle, bottom }
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .topLeft: return "Top left"
+        case .topCenter: return "Top middle"
+        case .topRight: return "Top right"
+        case .middleLeft: return "Left middle"
+        case .middleRight: return "Right middle"
+        case .bottomLeft: return "Bottom left"
+        case .bottomCenter: return "Bottom middle"
+        case .bottomRight: return "Bottom right"
+        }
+    }
+
+    var column: Column {
+        switch self {
+        case .topLeft, .middleLeft, .bottomLeft: return .left
+        case .topCenter, .bottomCenter: return .center
+        case .topRight, .middleRight, .bottomRight: return .right
+        }
+    }
+
+    var row: Row {
+        switch self {
+        case .topLeft, .topCenter, .topRight: return .top
+        case .middleLeft, .middleRight: return .middle
+        case .bottomLeft, .bottomCenter, .bottomRight: return .bottom
+        }
+    }
+}
+
 // MARK: - ReminderConfig
 
 /// User-editable configuration for one reminder type.
@@ -117,6 +160,7 @@ final class AppSettings: ObservableObject {
         static let weekdaysOnly = "weekdaysOnly"
         static let respectFocus = "respectFocus"
         static let themeColor = "themeColor"
+        static let reminderPosition = "reminderPosition"
     }
 
     /// Default theme: the green used by the Done button.
@@ -157,6 +201,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(AppSettings.hex(from: themeColor), forKey: Keys.themeColor) }
     }
 
+    /// Screen corner for the popup (defaults to bottom right).
+    @Published var reminderPosition: ReminderPosition {
+        didSet { defaults.set(reminderPosition.rawValue, forKey: Keys.reminderPosition) }
+    }
+
     /// `defaults` is injectable so unit tests can use an isolated suite.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -168,6 +217,8 @@ final class AppSettings: ObservableObject {
         self.workEndMinutes = defaults.object(forKey: Keys.workEndMinutes) as? Int ?? 18 * 60
         self.weekdaysOnly = defaults.object(forKey: Keys.weekdaysOnly) as? Bool ?? true
         self.respectFocus = defaults.object(forKey: Keys.respectFocus) as? Bool ?? true
+        self.reminderPosition = defaults.string(forKey: Keys.reminderPosition)
+            .flatMap(ReminderPosition.init(rawValue:)) ?? .bottomRight
         self.themeColor = defaults.string(forKey: Keys.themeColor).flatMap(AppSettings.color(fromHex:))
             ?? AppSettings.defaultThemeColor
     }

@@ -19,6 +19,42 @@ enum ReminderLayout {
     static let characterSize: CGFloat = 150
     static let bubbleWidth: CGFloat = 260
     static let trailingPadding: CGFloat = 8
+
+    /// Panel frame (screen coordinates, bottom-left origin) for a corner of `visibleFrame`.
+    static func panelFrame(in visibleFrame: CGRect, position: ReminderPosition) -> CGRect {
+        let size = panelSize
+        let x: CGFloat
+        switch position.column {
+        case .left: x = visibleFrame.minX + screenMargin
+        case .center: x = visibleFrame.midX - size.width / 2
+        case .right: x = visibleFrame.maxX - size.width - screenMargin
+        }
+        let y: CGFloat
+        switch position.row {
+        case .top: y = visibleFrame.maxY - size.height - screenMargin
+        case .middle: y = visibleFrame.midY - size.height / 2
+        case .bottom: y = visibleFrame.minY + screenMargin
+        }
+        return CGRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    /// Bubble rect in the panel's top-left-origin coordinates. The bubble sits
+    /// above the character on the bottom and middle rows and below it on the top row.
+    static func bubbleRect(size: CGSize, position: ReminderPosition) -> CGRect {
+        let x: CGFloat
+        switch position.column {
+        case .left: x = trailingPadding
+        case .center: x = (panelSize.width - size.width) / 2
+        case .right: x = panelSize.width - trailingPadding - size.width
+        }
+        let y: CGFloat
+        switch position.row {
+        case .top: y = characterSize
+        case .middle: y = (panelSize.height - characterSize - size.height) / 2
+        case .bottom: y = panelSize.height - characterSize - size.height
+        }
+        return CGRect(x: x, y: y, width: size.width, height: size.height)
+    }
 }
 
 // MARK: - View model
@@ -32,8 +68,9 @@ final class ReminderViewModel: ObservableObject {
     /// Drives the slide/bounce in (true) and slide out (false).
     @Published var isPresented = false
     @Published private(set) var pose: Pose = .idle
-    /// Size of the bubble + tail, reported by the view; used to compute the clickable area.
-    @Published var bubbleSize: CGSize = .zero
+    /// Size of the bubble + tail, measured once up front by the panel controller (not via
+    /// SwiftUI preferences, which weren't reliably delivered while the view slides in).
+    var bubbleSize: CGSize = .zero
 
     /// Updated by the panel controller's mouse tracking (not observed by the view).
     var isHovering = false
@@ -44,10 +81,12 @@ final class ReminderViewModel: ObservableObject {
     private var blinkTimer: Timer?
 
     let themeColor: Color
+    let position: ReminderPosition
 
-    init(reminder: Reminder, characters: CharacterStore, themeColor: Color) {
+    init(reminder: Reminder, characters: CharacterStore, themeColor: Color, position: ReminderPosition = .bottomRight) {
         self.reminder = reminder
         self.themeColor = themeColor
+        self.position = position
         self.idle = characters.idleImage()
         self.blink = characters.image(for: .blink)
         self.wave = characters.image(for: .wave)
@@ -67,13 +106,7 @@ final class ReminderViewModel: ObservableObject {
     /// The interactive area (bubble) in the panel's top-left-origin coordinates.
     var interactiveRect: CGRect {
         guard bubbleSize != .zero else { return .zero }
-        let panel = ReminderLayout.panelSize
-        return CGRect(
-            x: panel.width - ReminderLayout.trailingPadding - bubbleSize.width,
-            y: panel.height - ReminderLayout.characterSize - bubbleSize.height,
-            width: bubbleSize.width,
-            height: bubbleSize.height
-        )
+        return ReminderLayout.bubbleRect(size: bubbleSize, position: position)
     }
 
     /// Triggers the entrance animation and starts the idle behaviours.
@@ -113,13 +146,6 @@ final class ReminderViewModel: ObservableObject {
     }
 }
 
-// MARK: - Preference key to measure the bubble
-
-private struct BubbleSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
-}
-
 // MARK: - ReminderView
 
 struct ReminderView: View {
@@ -127,18 +153,62 @@ struct ReminderView: View {
     let onDone: () -> Void
     let onSnooze: () -> Void
 
+    private var position: ReminderPosition { model.position }
+    private var horizontal: HorizontalAlignment {
+        switch position.column {
+        case .left: return .leading
+        case .center: return .center
+        case .right: return .trailing
+        }
+    }
+
+    private var vertical: VerticalAlignment {
+        switch position.row {
+        case .top: return .top
+        case .middle: return .center
+        case .bottom: return .bottom
+        }
+    }
+
+    private var panelAlignment: Alignment { Alignment(horizontal: horizontal, vertical: vertical) }
+
+    /// Off-screen offset for the slide-in: from the nearest side edge, or from the
+    /// top/bottom edge for the centered columns.
+    private var hiddenOffset: CGSize {
+        let distance = ReminderLayout.panelSize.width + 40
+        switch position.column {
+        case .left: return CGSize(width: -distance, height: 0)
+        case .right: return CGSize(width: distance, height: 0)
+        case .center: return CGSize(width: 0, height: position.row == .top ? -distance : distance)
+        }
+    }
+
+    private var edgePadding: Edge.Set {
+        switch position.column {
+        case .left: return .leading
+        case .right: return .trailing
+        case .center: return []
+        }
+    }
+
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: panelAlignment) {
             // Fully transparent backdrop the size of the panel.
             Color.clear
 
-            VStack(alignment: .trailing, spacing: 0) {
-                bubbleBlock
-                character
+            VStack(alignment: horizontal, spacing: 0) {
+                // Bubble above the character in bottom corners, below it in top corners.
+                if position.row == .top {
+                    character
+                    bubbleBlock
+                } else {
+                    bubbleBlock
+                    character
+                }
             }
-            .padding(.trailing, ReminderLayout.trailingPadding)
-            // Slide in from the right edge with a springy bounce; slide out smoothly.
-            .offset(x: model.isPresented ? 0 : ReminderLayout.panelSize.width + 40)
+            .padding(edgePadding, ReminderLayout.trailingPadding)
+            // Slide in from the nearest screen edge with a springy bounce; slide out smoothly.
+            .offset(model.isPresented ? .zero : hiddenOffset)
             .animation(
                 model.isPresented
                     ? Animation.spring(response: 0.7, dampingFraction: 0.5)
@@ -147,16 +217,17 @@ struct ReminderView: View {
             )
         }
         .frame(width: ReminderLayout.panelSize.width, height: ReminderLayout.panelSize.height)
-        .onPreferenceChange(BubbleSizeKey.self) { size in
-            // Deferred so we never publish a change in the middle of a view update.
-            DispatchQueue.main.async { model.bubbleSize = size }
-        }
     }
+
+    /// The bubble alone, used to measure its size up front (see `ReminderViewModel.bubbleSize`).
+    var bubbleForMeasuring: some View { bubbleBlock }
 
     // MARK: Speech bubble
 
     private var bubbleBlock: some View {
-        VStack(alignment: .trailing, spacing: -1) {
+        VStack(alignment: horizontal, spacing: -1) {
+            if position.row == .top { bubbleTail }
+
             VStack(alignment: .leading, spacing: 10) {
                 Text(model.reminder.message)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -180,19 +251,10 @@ struct ReminderView: View {
                     .stroke(Color.black.opacity(0.12), lineWidth: 1)
             )
 
-            BubbleTail()
-                .fill(Color.white)
-                .frame(width: 26, height: 14)
-                .padding(.trailing, 56)
+            if position.row != .top { bubbleTail }
         }
         .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 2)
-        // Measure the layout size (not affected by the scale animation below).
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: BubbleSizeKey.self, value: proxy.size)
-            }
-        )
-        .scaleEffect(model.isPresented ? 1 : 0.4, anchor: .bottomTrailing)
+        .scaleEffect(model.isPresented ? 1 : 0.4, anchor: scaleAnchor)
         .opacity(model.isPresented ? 1 : 0)
         .animation(
             model.isPresented
@@ -200,6 +262,27 @@ struct ReminderView: View {
                 : Animation.easeIn(duration: 0.2),
             value: model.isPresented
         )
+    }
+
+    /// Tail pointing at the character: down in bottom corners, up in top corners,
+    /// mirrored so it sits on the side nearest the screen edge.
+    private var bubbleTail: some View {
+        BubbleTail()
+            .fill(Color.white)
+            .frame(width: 26, height: 14)
+            .scaleEffect(x: position.column == .left ? -1 : 1, y: position.row == .top ? -1 : 1)
+            .padding(edgePadding, 56)
+    }
+
+    /// The bubble grows out of the corner nearest the character.
+    private var scaleAnchor: UnitPoint {
+        let x: CGFloat
+        switch position.column {
+        case .left: x = 0
+        case .center: x = 0.5
+        case .right: x = 1
+        }
+        return UnitPoint(x: x, y: position.row == .top ? 0 : 1)
     }
 
     // MARK: Character
