@@ -5,7 +5,7 @@
 //  Owns the transparent, borderless, always-on-top NSPanel that shows a
 //  reminder. Responsibilities:
 //    - queueing: never two popups at once
-//    - placing the panel bottom-right on the main screen
+//    - placing the panel in the configured corner of the main screen
 //    - visible on every Space and over full-screen apps, without stealing focus
 //    - click-through everywhere except the speech bubble
 //    - the ~8 second auto-dismiss and the slide-out
@@ -111,17 +111,12 @@ final class ReminderPanelController {
         current = reminder
         isDismissing = false
 
-        let model = ReminderViewModel(reminder: reminder, characters: characters, themeColor: settings.themeColor)
+        let position = settings.reminderPosition
+        let model = ReminderViewModel(reminder: reminder, characters: characters,
+                                      themeColor: settings.themeColor, position: position)
         self.model = model
 
-        let size = ReminderLayout.panelSize
-        let visible = screen.visibleFrame
-        let frame = NSRect(
-            x: visible.maxX - size.width - ReminderLayout.screenMargin,
-            y: visible.minY + ReminderLayout.screenMargin,
-            width: size.width,
-            height: size.height
-        )
+        let frame = ReminderLayout.panelFrame(in: screen.visibleFrame, position: position)
 
         let panel = makePanel(frame: frame)
         let root = ReminderView(
@@ -129,6 +124,7 @@ final class ReminderPanelController {
             onDone: { [weak self] in self?.dismiss(snooze: false) },
             onSnooze: { [weak self] in self?.dismiss(snooze: true) }
         )
+        model.bubbleSize = NSHostingView(rootView: root.bubbleForMeasuring).fittingSize
         panel.contentView = FirstMouseHostingView(rootView: root)
         panel.setFrame(frame, display: false)
         self.panel = panel
@@ -219,6 +215,7 @@ final class ReminderPanelController {
             height: rect.height
         )
         let inside = screenRect.contains(NSEvent.mouseLocation)
+
         model.isHovering = inside
         if panel.ignoresMouseEvents == inside {
             panel.ignoresMouseEvents = !inside
