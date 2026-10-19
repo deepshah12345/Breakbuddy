@@ -43,8 +43,11 @@ final class ReminderViewModel: ObservableObject {
     private let wave: NSImage?
     private var blinkTimer: Timer?
 
-    init(reminder: Reminder, characters: CharacterStore) {
+    let themeColor: Color
+
+    init(reminder: Reminder, characters: CharacterStore, themeColor: Color) {
         self.reminder = reminder
+        self.themeColor = themeColor
         self.idle = characters.idleImage()
         self.blink = characters.image(for: .blink)
         self.wave = characters.image(for: .wave)
@@ -162,8 +165,7 @@ struct ReminderView: View {
 
                 HStack(spacing: 8) {
                     Button("Done", action: onDone)
-                        .buttonStyle(CartoonButtonStyle(fill: Color(red: 0.30, green: 0.69, blue: 0.40),
-                                                        text: .white))
+                        .buttonStyle(CartoonButtonStyle(fill: model.themeColor, text: .white))
                     Button("Snooze \(AppSettings.snoozeMinutes) min", action: onSnooze)
                         .buttonStyle(CartoonButtonStyle(fill: Color(white: 0.88), text: .black))
                 }
