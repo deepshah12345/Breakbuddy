@@ -49,7 +49,8 @@ final class ReminderScheduler: ObservableObject {
     private var nextFire: [String: Date] = [:]
     private var appliedConfig: [String: ReminderConfig] = [:]
     private var lastTick: Date
-    private var wasInsideWorkingHours = true
+    /// Whether each reminder was inside its active window at the last tick.
+    private var wasInside: [String: Bool] = [:]
 
     private var timer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -145,7 +146,9 @@ final class ReminderScheduler: ObservableObject {
             nextFire[reminder.id] = current.addingTimeInterval(interval(of: reminder.config))
         }
         lastTick = current
-        wasInsideWorkingHours = settings.isWithinWorkingHours(current)
+        wasInside = Dictionary(uniqueKeysWithValues: settings.reminders.map {
+            ($0.id, settings.isReminderActive($0.id, at: current))
+        })
     }
 
     /// Called after the Mac wakes from sleep.
@@ -159,8 +162,10 @@ final class ReminderScheduler: ObservableObject {
             nextFire[id] = current.addingTimeInterval(Constants.wakeGraceDelay)
         }
         lastTick = current
-        // Don't let the "working hours just opened" restart wipe out the catch-up above.
-        wasInsideWorkingHours = settings.isWithinWorkingHours(current)
+        // Don't let the "window just opened" restart wipe out the catch-up above.
+        wasInside = Dictionary(uniqueKeysWithValues: settings.reminders.map {
+            ($0.id, settings.isReminderActive($0.id, at: current))
+        })
     }
 
     // MARK: - Ticking (internal so tests can drive it directly)
@@ -176,19 +181,19 @@ final class ReminderScheduler: ObservableObject {
         }
         guard !isPaused else { return }
 
-        // Working hours: do nothing outside them; restart countdowns on entry
-        // so there's no reminder the instant the workday begins.
-        guard settings.isWithinWorkingHours(current) else {
-            wasInsideWorkingHours = false
-            return
-        }
-        if !wasInsideWorkingHours {
-            wasInsideWorkingHours = true
-            resetAll()
-            return
-        }
-
+        // Each reminder has its own active window (its own schedule or the global working
+        // hours). Outside it we do nothing; when it opens the countdown restarts, so there's
+        // no reminder the instant the window begins.
         for reminder in settings.reminders {
+            guard settings.isReminderActive(reminder.id, at: current) else {
+                wasInside[reminder.id] = false
+                continue
+            }
+            if wasInside[reminder.id] == false {
+                wasInside[reminder.id] = true
+                nextFire[reminder.id] = current.addingTimeInterval(interval(of: reminder.config))
+                continue
+            }
             if let due = nextFire[reminder.id], due <= current {
                 evaluate(reminder.id, at: current)
             }
@@ -248,6 +253,7 @@ final class ReminderScheduler: ObservableObject {
         for id in nextFire.keys where !liveIDs.contains(id) {
             nextFire[id] = nil
             appliedConfig[id] = nil
+            wasInside[id] = nil
         }
 
         for reminder in settings.reminders {

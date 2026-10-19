@@ -143,6 +143,76 @@ final class ReminderSchedulerTests: XCTestCase {
         XCTAssertEqual(settings.reminders.map(\.id), BuiltInReminder.ids)
     }
 
+    // MARK: Per-reminder schedules
+
+    /// Minutes since midnight of the fake clock, in the local time zone.
+    private var clockMinutes: Int {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: clock)
+        return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+    }
+
+    private func wrap(_ minutes: Int) -> Int { ((minutes % 1440) + 1440) % 1440 }
+
+    func testOwnScheduleOutsideItsWindowDoesNotFire() {
+        let (scheduler, settings) = makeScheduler()
+        var config = settings.config(for: BuiltInReminder.water)
+        config.useOwnSchedule = true
+        config.scheduleDays = [1, 2, 3, 4, 5, 6, 7]
+        config.scheduleStartMinutes = wrap(clockMinutes + 120) // window opens in 2 hours
+        config.scheduleEndMinutes = wrap(clockMinutes + 180)
+        settings.setConfig(config, for: BuiltInReminder.water)
+        scheduler.resetAll()
+
+        advance(50 * 60, scheduler: scheduler)
+        XCTAssertFalse(fired.contains { $0.reminderID == BuiltInReminder.water })
+    }
+
+    func testOwnScheduleInsideItsWindowFires() {
+        let (scheduler, settings) = makeScheduler()
+        var config = settings.config(for: BuiltInReminder.water)
+        config.useOwnSchedule = true
+        config.scheduleDays = [1, 2, 3, 4, 5, 6, 7]
+        config.scheduleStartMinutes = wrap(clockMinutes - 10)
+        config.scheduleEndMinutes = wrap(clockMinutes + 600)
+        settings.setConfig(config, for: BuiltInReminder.water)
+        scheduler.resetAll()
+
+        advance(46 * 60, scheduler: scheduler)
+        XCTAssertTrue(fired.contains { $0.reminderID == BuiltInReminder.water })
+    }
+
+    func testOwnScheduleWithNoDaysNeverFires() {
+        let (scheduler, settings) = makeScheduler()
+        var config = settings.config(for: BuiltInReminder.water)
+        config.useOwnSchedule = true
+        config.scheduleDays = []
+        settings.setConfig(config, for: BuiltInReminder.water)
+        scheduler.resetAll()
+
+        advance(50 * 60, scheduler: scheduler)
+        XCTAssertFalse(fired.contains { $0.reminderID == BuiltInReminder.water })
+    }
+
+    func testReminderWithoutOwnScheduleFollowsGlobalWorkingHours() {
+        let (scheduler, settings) = makeScheduler()
+        settings.workingHoursEnabled = true
+        settings.weekdaysOnly = false
+        settings.workStartMinutes = wrap(clockMinutes + 120) // global window is closed right now
+        settings.workEndMinutes = wrap(clockMinutes + 180)
+        scheduler.resetAll()
+
+        advance(50 * 60, scheduler: scheduler)
+        XCTAssertTrue(fired.isEmpty)
+    }
+
+    func testOldSavedConfigWithoutScheduleFieldsStillLoads() throws {
+        let json = #"{"enabled":true,"intervalMinutes":30,"messages":["Hi"]}"#
+        let config = try JSONDecoder().decode(ReminderConfig.self, from: Data(json.utf8))
+        XCTAssertFalse(config.useOwnSchedule)
+        XCTAssertEqual(config.scheduleDays, [2, 3, 4, 5, 6])
+        XCTAssertEqual(config.intervalMinutes, 30)
+    }
+
     // MARK: Persistence and migration
 
     func testCustomRemindersPersistAcrossLaunches() {

@@ -226,6 +226,59 @@ private struct HexColorField: View {
     }
 }
 
+// MARK: - Per-reminder schedule
+
+/// From / To time pickers and a Mon-Sun day picker for one reminder's own schedule.
+private struct ScheduleEditor: View {
+    @Binding var config: ReminderConfig
+
+    /// Calendar weekday numbers in display order (Monday first).
+    private let days: [(number: Int, label: String)] = [
+        (2, "Mon"), (3, "Tue"), (4, "Wed"), (5, "Thu"), (6, "Fri"), (7, "Sat"), (1, "Sun")
+    ]
+
+    private func timeBinding(_ keyPath: WritableKeyPath<ReminderConfig, Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                let minutes = config[keyPath: keyPath]
+                return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60,
+                                             second: 0, of: Date()) ?? Date()
+            },
+            set: { newDate in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+                config[keyPath: keyPath] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+            }
+        )
+    }
+
+    private func dayBinding(_ number: Int) -> Binding<Bool> {
+        Binding(
+            get: { config.scheduleDays.contains(number) },
+            set: { isOn in
+                var set = Set(config.scheduleDays)
+                if isOn { set.insert(number) } else { set.remove(number) }
+                config.scheduleDays = set.sorted()
+            }
+        )
+    }
+
+    var body: some View {
+        DatePicker("From", selection: timeBinding(\.scheduleStartMinutes), displayedComponents: .hourAndMinute)
+        DatePicker("To", selection: timeBinding(\.scheduleEndMinutes), displayedComponents: .hourAndMinute)
+        HStack(spacing: 4) {
+            ForEach(days, id: \.number) { day in
+                Toggle(day.label, isOn: dayBinding(day.number))
+                    .toggleStyle(.button)
+            }
+        }
+        if config.scheduleDays.isEmpty {
+            Text("No days selected, so this reminder will never fire.")
+                .font(.caption)
+                .foregroundColor(.orange)
+        }
+    }
+}
+
 // MARK: - One reminder (enable, interval, messages, character)
 
 private struct ReminderSection: View {
@@ -270,6 +323,15 @@ private struct ReminderSection: View {
                 .disabled(!config.wrappedValue.enabled)
 
                 Toggle("Keep on screen until I tap Done", isOn: config.stayUntilDone)
+
+                Toggle("Use its own schedule", isOn: config.useOwnSchedule)
+                if config.wrappedValue.useOwnSchedule {
+                    ScheduleEditor(config: config)
+                } else if settings.workingHoursEnabled {
+                    Text("Follows the working hours below.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
                 MessageListEditor(
                     initial: config.wrappedValue.messages,

@@ -73,9 +73,21 @@ struct ReminderConfig: Codable, Equatable {
     var messages: [String]
     /// When true the popup stays until the user taps Done or Snooze (no ~8 s auto-dismiss).
     var stayUntilDone: Bool = false
+
+    /// When false (default) the reminder follows the global working hours.
+    /// When true it uses the schedule below instead.
+    var useOwnSchedule: Bool = false
+    /// Own schedule: minutes since midnight.
+    var scheduleStartMinutes: Int = 9 * 60
+    var scheduleEndMinutes: Int = 18 * 60
+    /// Own schedule: days it may fire, as Calendar weekday numbers (Sunday = 1 ... Saturday = 7).
+    var scheduleDays: [Int] = ReminderConfig.weekdayNumbers
 }
 
 extension ReminderConfig {
+    /// Monday to Friday as Calendar weekday numbers.
+    static let weekdayNumbers = [2, 3, 4, 5, 6]
+
     /// Custom decoding so settings saved by older versions (without `stayUntilDone`)
     /// still load instead of being thrown away.
     init(from decoder: Decoder) throws {
@@ -84,6 +96,10 @@ extension ReminderConfig {
         intervalMinutes = try c.decode(Int.self, forKey: .intervalMinutes)
         messages = try c.decode([String].self, forKey: .messages)
         stayUntilDone = try c.decodeIfPresent(Bool.self, forKey: .stayUntilDone) ?? false
+        useOwnSchedule = try c.decodeIfPresent(Bool.self, forKey: .useOwnSchedule) ?? false
+        scheduleStartMinutes = try c.decodeIfPresent(Int.self, forKey: .scheduleStartMinutes) ?? 9 * 60
+        scheduleEndMinutes = try c.decodeIfPresent(Int.self, forKey: .scheduleEndMinutes) ?? 18 * 60
+        scheduleDays = try c.decodeIfPresent([Int].self, forKey: .scheduleDays) ?? ReminderConfig.weekdayNumbers
     }
 }
 
@@ -346,6 +362,20 @@ final class AppSettings: ObservableObject {
             return minutes >= workStartMinutes && minutes < workEndMinutes
         }
         return minutes >= workStartMinutes || minutes < workEndMinutes
+    }
+
+    /// True if the given reminder may fire at `date`: its own schedule when it has one,
+    /// otherwise the global working hours.
+    func isReminderActive(_ reminderID: String, at date: Date, calendar: Calendar = .current) -> Bool {
+        let config = self.config(for: reminderID)
+        guard config.useOwnSchedule else { return isWithinWorkingHours(date, calendar: calendar) }
+
+        let parts = calendar.dateComponents([.weekday, .hour, .minute], from: date)
+        if let weekday = parts.weekday, !config.scheduleDays.contains(weekday) { return false }
+        let minutes = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        let start = config.scheduleStartMinutes, end = config.scheduleEndMinutes
+        if start <= end { return minutes >= start && minutes < end }
+        return minutes >= start || minutes < end // crosses midnight
     }
 
     // MARK: Persistence helpers
