@@ -37,8 +37,8 @@ final class ReminderPanelController {
     private static let slideOutDuration: TimeInterval = 0.6
     private static let gapBetweenReminders: TimeInterval = 0.3
 
-    /// Called when the user taps "Snooze".
-    var onSnooze: ((ReminderType, Int) -> Void)?
+    /// Called when the user taps "Snooze" (reminder id, minutes).
+    var onSnooze: ((String, Int) -> Void)?
 
     private let settings: AppSettings
     private let characters: CharacterStore
@@ -61,8 +61,8 @@ final class ReminderPanelController {
 
     /// Shows the reminder now, or queues it behind the one on screen.
     func enqueue(_ reminder: Reminder) {
-        // Don't stack duplicates of the same type (on screen or already waiting).
-        if current?.type == reminder.type || queue.contains(where: { $0.type == reminder.type }) {
+        // Don't stack duplicates of the same reminder (on screen or already waiting).
+        if current?.reminderID == reminder.reminderID || queue.contains(where: { $0.reminderID == reminder.reminderID }) {
             return
         }
         queue.append(reminder)
@@ -79,7 +79,7 @@ final class ReminderPanelController {
         mouseTimer?.invalidate()
         mouseTimer = nil
 
-        if snooze { onSnooze?(reminder.type, AppSettings.snoozeMinutes) }
+        if snooze { onSnooze?(reminder.reminderID, AppSettings.snoozeMinutes) }
 
         model?.stop()                      // plays the slide-out animation
         panel?.ignoresMouseEvents = true   // can't be clicked while leaving
@@ -141,7 +141,7 @@ final class ReminderPanelController {
         DispatchQueue.main.async { model.start() }
 
         // "Keep on screen until I tap Done" reminders skip the auto-dismiss timer.
-        if !settings.config(for: reminder.type).stayUntilDone {
+        if !settings.config(for: reminder.reminderID).stayUntilDone {
             startDismissTimer(after: Self.displayDuration)
         }
         startMouseTracking()

@@ -57,6 +57,16 @@ To change the defaults used on first launch, edit `defaultConfig` in `Models.swi
 Other settings: working hours (e.g. 9:00-18:00, weekdays only), sound on/off,
 skip during Do Not Disturb/Focus, launch at login. All persist in UserDefaults.
 
+### Custom reminders and per-reminder characters
+
+Besides Water and Break you can add your own reminders: open **Settings…** and press **Add custom reminder**. Each custom reminder has its own name, menu/bubble icon, interval, message list and "keep until Done" option, and can be deleted again (Water and Break can't be deleted).
+
+Every reminder can also have its own character. Expand **Character for this reminder** and pick PNGs for Idle / Blink / Wave. Anything you don't set falls back to the **Default character**, then to the built-in artwork. Per-reminder images are stored in `~/Library/Application Support/BreakBuddy/reminders/<id>/`.
+
+### Per-reminder schedules
+
+By default every reminder follows the global **Working hours** section. To give one reminder different times, switch on **Use its own schedule** inside that reminder: pick a From/To time and the days (Mon to Sun, with "Every day" and "Weekdays" shortcuts; the global working hours have the same day picker). A reminder's countdown restarts when its window opens, and it stays quiet outside it.
+
 ## 5. Build a release .app and add it to Login Items
 
 1. In Xcode: **Product > Archive** (or **Product > Build For > Profiling** for a quick Release build).

@@ -87,9 +87,10 @@ final class ReminderViewModel: ObservableObject {
         self.reminder = reminder
         self.themeColor = themeColor
         self.position = position
-        self.idle = characters.idleImage()
-        self.blink = characters.image(for: .blink)
-        self.wave = characters.image(for: .wave)
+        // Each reminder can have its own character; missing poses fall back to the default one.
+        self.idle = characters.idleImage(reminderID: reminder.reminderID)
+        self.blink = characters.image(for: .blink, reminderID: reminder.reminderID)
+        self.wave = characters.image(for: .wave, reminderID: reminder.reminderID)
     }
 
     deinit { blinkTimer?.invalidate() }
