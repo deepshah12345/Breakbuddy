@@ -45,6 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController.onSnooze = { [weak scheduler] reminderID, minutes in
             scheduler?.snooze(reminderID, minutes: minutes)
         }
+        // Done button -> scheduler (starts the next countdown for "keep until Done" reminders).
+        panelController.onDone = { [weak scheduler] reminderID in
+            scheduler?.reminderCompleted(reminderID)
+        }
 
         let settingsWindow = SettingsWindowController(
             settings: settings,

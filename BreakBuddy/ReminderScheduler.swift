@@ -27,14 +27,12 @@ final class ReminderScheduler: ObservableObject {
     enum Constants {
         /// How often we compare the clock with next-fire dates.
         static let tickInterval: TimeInterval = 5
-        /// Idle longer than this => user is away, skip the reminder.
+        /// No keyboard / mouse for longer than this => the user is away.
         static let idleThreshold: TimeInterval = 5 * 60
         /// When Focus is on we look again after this long.
         static let focusRetryInterval: TimeInterval = 5 * 60
         /// A gap between ticks longer than this means the Mac slept.
         static let sleepGapThreshold: TimeInterval = 60
-        /// A reminder that came due while the Mac slept shows this long after waking.
-        static let wakeGraceDelay: TimeInterval = 60
     }
 
     @Published private(set) var isPaused = false
@@ -55,6 +53,18 @@ final class ReminderScheduler: ObservableObject {
     private var timer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var wakeObservers: [NSObjectProtocol] = []
+    private var distributedObservers: [NSObjectProtocol] = []
+
+    /// True while the display is off (the Mac itself may still be running).
+    var displayAsleep = false
+    /// True while the screen is locked or another user's session is in front.
+    var screenLocked = false
+    /// Whether the user was away at the previous tick.
+    private var wasAway = false
+
+    /// Reminders whose popup is on screen waiting for "Done" (only for "keep on screen until
+    /// I tap Done"). Their countdown does not run; it starts after Done is tapped.
+    private var awaitingDone: Set<String> = []
 
     init(settings: AppSettings,
          system: SystemStateProviding,
@@ -68,6 +78,7 @@ final class ReminderScheduler: ObservableObject {
     deinit {
         timer?.invalidate()
         wakeObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        distributedObservers.forEach { DistributedNotificationCenter.default().removeObserver($0) }
     }
 
     // MARK: - Lifecycle
@@ -89,19 +100,36 @@ final class ReminderScheduler: ObservableObject {
             .sink { [weak self] _ in self?.settingsDidChange() }
             .store(in: &cancellables)
 
-        // After sleep, keep countdowns that still have time left and give overdue ones a short grace delay.
+        // Waking from sleep: the time spent asleep must not count (see handleWake).
         let center = NSWorkspace.shared.notificationCenter
-        let names: [Notification.Name] = [
+        let wakeNames: [Notification.Name] = [
             NSWorkspace.didWakeNotification,
             NSWorkspace.screensDidWakeNotification,
             NSWorkspace.sessionDidBecomeActiveNotification
         ]
-        for name in names {
+        for name in wakeNames {
             let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 self?.handleWake()
             }
             wakeObservers.append(token)
         }
+
+        // Track "nobody can see the screen" so countdowns freeze while the display is off or locked.
+        func track(_ name: Notification.Name, center: NotificationCenter,
+                   _ update: @escaping (ReminderScheduler) -> Void) -> NSObjectProtocol {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                if let self = self { update(self) }
+            }
+        }
+        wakeObservers.append(track(NSWorkspace.screensDidSleepNotification, center: center) { $0.displayAsleep = true })
+        wakeObservers.append(track(NSWorkspace.screensDidWakeNotification, center: center) { $0.displayAsleep = false })
+        wakeObservers.append(track(NSWorkspace.sessionDidResignActiveNotification, center: center) { $0.screenLocked = true })
+        wakeObservers.append(track(NSWorkspace.sessionDidBecomeActiveNotification, center: center) { $0.screenLocked = false })
+
+        // The lock screen has no public API; these distributed notifications are widely used for it.
+        let distributed = DistributedNotificationCenter.default()
+        distributedObservers.append(track(Notification.Name("com.apple.screenIsLocked"), center: distributed) { $0.screenLocked = true })
+        distributedObservers.append(track(Notification.Name("com.apple.screenIsUnlocked"), center: distributed) { $0.screenLocked = false })
     }
 
     func stop() {
@@ -129,8 +157,19 @@ final class ReminderScheduler: ObservableObject {
     }
 
     /// Postpones one reminder.
+    /// The popup comes back after `minutes`; once it is shown again (and, for "keep until Done"
+    /// reminders, once the user taps Done) the normal interval starts.
     func snooze(_ reminderID: String, minutes: Int) {
+        awaitingDone.remove(reminderID)
         nextFire[reminderID] = now().addingTimeInterval(TimeInterval(minutes * 60))
+    }
+
+    /// The user tapped Done. For a "keep on screen until I tap Done" reminder this starts the
+    /// next countdown; for any other reminder it does nothing (its countdown already runs).
+    func reminderCompleted(_ reminderID: String) {
+        guard awaitingDone.remove(reminderID) != nil,
+              let definition = settings.reminder(id: reminderID) else { return }
+        nextFire[reminderID] = now().addingTimeInterval(interval(of: definition.config))
     }
 
     /// When the given reminder will next be due (nil if never scheduled).
@@ -141,6 +180,7 @@ final class ReminderScheduler: ObservableObject {
         let current = now()
         nextFire.removeAll()
         appliedConfig.removeAll()
+        awaitingDone.removeAll()
         for reminder in settings.reminders {
             appliedConfig[reminder.id] = reminder.config
             nextFire[reminder.id] = current.addingTimeInterval(interval(of: reminder.config))
@@ -151,18 +191,15 @@ final class ReminderScheduler: ObservableObject {
         })
     }
 
-    /// Called after the Mac wakes from sleep.
-    /// - A reminder that came due while asleep is shown shortly after waking (one per reminder,
-    ///   never a pile of missed ones).
-    /// - A reminder that was not yet due keeps its original time, so time already
-    ///   counted before sleeping is not lost.
+    /// Called after the Mac wakes from sleep (and by the tick when it notices a long gap).
+    /// The time spent asleep doesn't count: every countdown is pushed back by it, so each
+    /// reminder continues where it stopped. Nothing is shown the moment the Mac wakes.
     func handleWake() {
         let current = now()
-        for (id, due) in nextFire where due <= current {
-            nextFire[id] = current.addingTimeInterval(Constants.wakeGraceDelay)
-        }
+        let slept = current.timeIntervalSince(lastTick)
+        if slept > 0 { shiftCountdowns(by: slept) }
         lastTick = current
-        // Don't let the "window just opened" restart wipe out the catch-up above.
+        // Don't let the "window just opened" restart wipe out the countdowns above.
         wasInside = Dictionary(uniqueKeysWithValues: settings.reminders.map {
             ($0.id, settings.isReminderActive($0.id, at: current))
         })
@@ -172,14 +209,30 @@ final class ReminderScheduler: ObservableObject {
 
     func tick() {
         let current = now()
+        let elapsed = current.timeIntervalSince(lastTick)
         defer { lastTick = current }
 
         // A long gap between ticks means the machine slept (covers a missed wake notification).
-        if current.timeIntervalSince(lastTick) > Constants.sleepGapThreshold {
+        if elapsed > Constants.sleepGapThreshold {
             handleWake()
             return
         }
         guard !isPaused else { return }
+
+        // While the user is away every countdown freezes; it continues when they return.
+        let away = isUserAway
+        let justLeft = away && !wasAway
+        wasAway = away
+        if away {
+            var shift = elapsed
+            if justLeft && system.idleSeconds > Constants.idleThreshold {
+                // They stopped touching the Mac a few minutes ago; give those minutes back too.
+                // Capped so a huge idle time (e.g. the app just launched) can't push things out for hours.
+                shift = max(elapsed, min(system.idleSeconds, Constants.idleThreshold + elapsed))
+            }
+            shiftCountdowns(by: shift)
+            return
+        }
 
         // Each reminder has its own active window (its own schedule or the global working
         // hours). Outside it we do nothing; when it opens the countdown restarts, so there's
@@ -191,6 +244,7 @@ final class ReminderScheduler: ObservableObject {
             }
             if wasInside[reminder.id] == false {
                 wasInside[reminder.id] = true
+                if awaitingDone.contains(reminder.id) { continue } // popup is waiting for Done
                 nextFire[reminder.id] = current.addingTimeInterval(interval(of: reminder.config))
                 continue
             }
@@ -211,21 +265,34 @@ final class ReminderScheduler: ObservableObject {
             nextFire[id] = current.addingTimeInterval(fullInterval)
             return
         }
-        // User is away from the keyboard: skip this occurrence.
-        if system.idleSeconds > Constants.idleThreshold {
-            nextFire[id] = current.addingTimeInterval(fullInterval)
-            return
-        }
         // Do Not Disturb / Focus: try again shortly rather than skipping a whole interval.
         if settings.respectFocus && system.isFocusModeActive {
             nextFire[id] = current.addingTimeInterval(Constants.focusRetryInterval)
             return
         }
 
-        nextFire[id] = current.addingTimeInterval(fullInterval)
+        if config.stayUntilDone {
+            // Keep-until-Done: the countdown starts only after the user taps Done.
+            awaitingDone.insert(id)
+            nextFire[id] = nil
+        } else {
+            nextFire[id] = current.addingTimeInterval(fullInterval)
+        }
         if let reminder = makeReminder(id) {
             onFire?(reminder)
         }
+    }
+
+    /// True when nobody is likely looking at the screen: no input for a while, display off,
+    /// screen locked, or another user's session in front.
+    private var isUserAway: Bool {
+        system.idleSeconds > Constants.idleThreshold || displayAsleep || screenLocked
+    }
+
+    /// Pushes every countdown later by `seconds` (this is how time is "frozen").
+    private func shiftCountdowns(by seconds: TimeInterval) {
+        guard seconds > 0 else { return }
+        nextFire = nextFire.mapValues { $0.addingTimeInterval(seconds) }
     }
 
     private func makeReminder(_ id: String) -> Reminder? {
@@ -255,9 +322,17 @@ final class ReminderScheduler: ObservableObject {
             appliedConfig[id] = nil
             wasInside[id] = nil
         }
+        awaitingDone.formIntersection(liveIDs)
 
         for reminder in settings.reminders {
             let config = reminder.config
+            if awaitingDone.contains(reminder.id) {
+                if config.enabled && config.stayUntilDone {
+                    appliedConfig[reminder.id] = config // keep waiting for Done
+                    continue
+                }
+                awaitingDone.remove(reminder.id)        // no longer a keep-until-Done reminder
+            }
             if let old = appliedConfig[reminder.id],
                nextFire[reminder.id] != nil,
                old.intervalMinutes == config.intervalMinutes, old.enabled == config.enabled {

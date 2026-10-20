@@ -39,6 +39,8 @@ final class ReminderPanelController {
 
     /// Called when the user taps "Snooze" (reminder id, minutes).
     var onSnooze: ((String, Int) -> Void)?
+    /// Called when the popup is dismissed without snoozing (Done tapped, or auto-dismissed).
+    var onDone: ((String) -> Void)?
 
     private let settings: AppSettings
     private let characters: CharacterStore
@@ -79,7 +81,11 @@ final class ReminderPanelController {
         mouseTimer?.invalidate()
         mouseTimer = nil
 
-        if snooze { onSnooze?(reminder.reminderID, AppSettings.snoozeMinutes) }
+        if snooze {
+            onSnooze?(reminder.reminderID, AppSettings.snoozeMinutes)
+        } else {
+            onDone?(reminder.reminderID)
+        }
 
         model?.stop()                      // plays the slide-out animation
         panel?.ignoresMouseEvents = true   // can't be clicked while leaving

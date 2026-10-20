@@ -7,7 +7,8 @@
 import XCTest
 @testable import BreakBuddy
 
-private struct FakeSystem: SystemStateProviding {
+/// A class so a test can change idle time after the scheduler has been created.
+private final class FakeSystem: SystemStateProviding {
     var idleSeconds: TimeInterval = 0
     var isFocusModeActive = false
 }
@@ -50,23 +51,26 @@ final class ReminderSchedulerTests: XCTestCase {
         XCTAssertEqual(fired.map(\.reminderID), [BuiltInReminder.water])
     }
 
-    func testOverdueReminderShowsShortlyAfterWake() {
+    // MARK: Away rule (countdowns freeze while away)
+
+    func testTimeAsleepDoesNotCount() {
         let (scheduler, _) = makeScheduler()
         clock = clock.addingTimeInterval(8 * 3600) // Mac slept for 8 hours
         scheduler.tick()
-        XCTAssertTrue(fired.isEmpty)               // nothing the instant it wakes
-        advance(65, scheduler: scheduler)
-        // Exactly one reminder per reminder, not a pile of missed ones.
-        XCTAssertEqual(fired.filter { $0.reminderID == BuiltInReminder.water }.count, 1)
-        XCTAssertEqual(fired.filter { $0.reminderID == BuiltInReminder.breakTime }.count, 1)
+        advance(60, scheduler: scheduler)
+        XCTAssertTrue(fired.isEmpty) // no catch-up popup right after waking
+        advance(43 * 60, scheduler: scheduler)
+        XCTAssertTrue(fired.isEmpty) // 44 of 45 minutes have been counted
+        advance(2 * 60, scheduler: scheduler)
+        XCTAssertEqual(fired.map(\.reminderID), [BuiltInReminder.water]) // continues where it stopped
     }
 
-    func testNotYetDueReminderKeepsRemainingTimeAfterWake() {
+    func testSleepKeepsTimeAlreadyCounted() {
         let (scheduler, _) = makeScheduler()
         let due = scheduler.nextFireDate(for: BuiltInReminder.water)
-        clock = clock.addingTimeInterval(30 * 60) // slept 30 of the 45 minutes
+        clock = clock.addingTimeInterval(30 * 60) // slept right away for 30 minutes
         scheduler.handleWake()
-        XCTAssertEqual(scheduler.nextFireDate(for: BuiltInReminder.water), due)
+        XCTAssertEqual(scheduler.nextFireDate(for: BuiltInReminder.water), due?.addingTimeInterval(30 * 60))
     }
 
     func testPausedDoesNotFire() {
@@ -76,12 +80,98 @@ final class ReminderSchedulerTests: XCTestCase {
         XCTAssertTrue(fired.isEmpty)
     }
 
-    func testIdleUserIsSkipped() {
-        var system = FakeSystem()
+    func testIdleUserFreezesCountdownAndResumesOnReturn() {
+        let system = FakeSystem()
         system.idleSeconds = 600
         let (scheduler, _) = makeScheduler(system: system)
-        advance(46 * 60, scheduler: scheduler)
+        advance(3 * 3600, scheduler: scheduler)
+        XCTAssertTrue(fired.isEmpty) // nothing fires while away, nothing piles up
+
+        system.idleSeconds = 0       // user is back
+        advance(60 * 60, scheduler: scheduler)
+        XCTAssertEqual(fired.filter { $0.reminderID == BuiltInReminder.water }.count, 1)
+    }
+
+    func testDisplayOffAndLockedFreezeCountdowns() {
+        let (scheduler, _) = makeScheduler()
+        scheduler.displayAsleep = true
+        advance(2 * 3600, scheduler: scheduler)
         XCTAssertTrue(fired.isEmpty)
+        scheduler.displayAsleep = false
+
+        scheduler.screenLocked = true
+        advance(2 * 3600, scheduler: scheduler)
+        XCTAssertTrue(fired.isEmpty)
+        scheduler.screenLocked = false
+
+        advance(44 * 60, scheduler: scheduler)
+        XCTAssertTrue(fired.isEmpty)
+        advance(2 * 60, scheduler: scheduler)
+        XCTAssertEqual(fired.first?.reminderID, BuiltInReminder.water)
+    }
+
+    // MARK: Keep on screen until Done
+
+    private func makeStayUntilDone() -> (ReminderScheduler, AppSettings) {
+        let (scheduler, settings) = makeScheduler()
+        var config = settings.config(for: BuiltInReminder.water)
+        config.stayUntilDone = true
+        settings.setConfig(config, for: BuiltInReminder.water)
+        scheduler.resetAll()
+        return (scheduler, settings)
+    }
+
+    private func waterCount() -> Int { fired.filter { $0.reminderID == BuiltInReminder.water }.count }
+
+    func testStayUntilDoneCountdownStartsAfterDone() {
+        let (scheduler, _) = makeStayUntilDone()
+        advance(46 * 60, scheduler: scheduler)
+        XCTAssertEqual(waterCount(), 1)
+
+        advance(3 * 3600, scheduler: scheduler) // popup ignored for 3 hours
+        XCTAssertEqual(waterCount(), 1)         // no second popup, countdown not running
+
+        scheduler.reminderCompleted(BuiltInReminder.water)
+        advance(44 * 60, scheduler: scheduler)
+        XCTAssertEqual(waterCount(), 1)
+        advance(2 * 60, scheduler: scheduler)   // full interval after Done
+        XCTAssertEqual(waterCount(), 2)
+    }
+
+    func testStayUntilDoneSnoozeComesBackThenWaitsForDone() {
+        let (scheduler, _) = makeStayUntilDone()
+        advance(46 * 60, scheduler: scheduler)
+        XCTAssertEqual(waterCount(), 1)
+
+        scheduler.snooze(BuiltInReminder.water, minutes: 10)
+        advance(9 * 60, scheduler: scheduler)
+        XCTAssertEqual(waterCount(), 1)
+        advance(2 * 60, scheduler: scheduler)   // back after 10 minutes
+        XCTAssertEqual(waterCount(), 2)
+
+        advance(3 * 3600, scheduler: scheduler) // still waiting for Done
+        XCTAssertEqual(waterCount(), 2)
+
+        scheduler.reminderCompleted(BuiltInReminder.water)
+        advance(46 * 60, scheduler: scheduler)
+        XCTAssertEqual(waterCount(), 3)
+    }
+
+    func testDoneDoesNothingForAutoDismissReminders() {
+        let (scheduler, _) = makeScheduler()
+        let due = scheduler.nextFireDate(for: BuiltInReminder.water)
+        scheduler.reminderCompleted(BuiltInReminder.water)
+        XCTAssertEqual(scheduler.nextFireDate(for: BuiltInReminder.water), due) // countdown unchanged
+    }
+
+    func testAutoDismissReminderRestartsCountdownWhenShown() {
+        let (scheduler, _) = makeScheduler()
+        advance(46 * 60, scheduler: scheduler)
+        XCTAssertEqual(waterCount(), 1)
+        advance(43 * 60, scheduler: scheduler)  // next one 45 minutes after the first
+        XCTAssertEqual(waterCount(), 1)
+        advance(2 * 60, scheduler: scheduler)
+        XCTAssertEqual(waterCount(), 2)
     }
 
     func testSnoozeMovesNextFire() {
