@@ -106,6 +106,9 @@ struct SettingsView: View {
                 Toggle("Play a sound with reminders", isOn: $settings.soundEnabled)
                 Toggle("Skip reminders during Do Not Disturb / Focus", isOn: $settings.respectFocus)
                 LaunchAtLoginToggle()
+                Text("Countdowns pause while you're away (asleep, screen off, locked, or no keyboard/mouse for 5 minutes) and continue when you return.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Section("Default character") {
@@ -357,6 +360,11 @@ private struct ReminderSection: View {
                 .disabled(!config.wrappedValue.enabled)
 
                 Toggle("Keep on screen until I tap Done", isOn: config.stayUntilDone)
+                if config.wrappedValue.stayUntilDone {
+                    Text("The next countdown starts after you tap Done.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
                 Toggle("Use its own schedule", isOn: config.useOwnSchedule)
                 if config.wrappedValue.useOwnSchedule {

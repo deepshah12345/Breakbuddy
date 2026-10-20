@@ -102,12 +102,14 @@ quietly reports "off" and reminders are never wrongly blocked. Turn the option o
 ## 7. How the smart scheduling works
 
 - One 5-second tick timer compares the clock with each reminder's next-fire time (`ReminderScheduler.swift`).
-- **Sleep/wake:** on wake (and if a tick arrives after a >60 s gap) a reminder that came due while asleep is shown about a minute after waking (one per type, never a pile). A reminder that wasn't due yet keeps its original time.
-- **Idle:** if there's been no input for over 5 minutes when a reminder is due, that occurrence is skipped.
+- **Away rule:** BreakBuddy only counts time while you're at your Mac. "Away" means asleep, display off, screen locked, another user's session in front, or no keyboard/mouse for 5 minutes. While away every countdown freezes, and when you return it continues where it stopped. Nothing pops up on an empty screen and there is no catch-up pile after a long absence. (Example: 7 minutes left, you leave for 2 hours, the reminder shows 7 minutes after you return.)
+- **Sleep/wake:** time spent asleep doesn't count (also detected if a tick arrives after a >60 s gap). Nothing is shown the moment the Mac wakes.
+- **Lock detection** uses macOS lock/unlock notifications that Apple doesn't document; the 5-minute idle check backs it up.
 - **Focus on:** the reminder is retried 5 minutes later.
 - **Working hours:** nothing fires outside them; countdowns restart when the window opens.
 - **Queue:** the panel controller shows one popup at a time; others wait their turn (one per type).
-- **Snooze 10 min** postpones just that reminder type. **Done** (or ~8 s timeout) just dismisses it.
+- **Keep on screen until I tap Done:** the countdown for that reminder starts only after you tap **Done**, so an ignored popup never stacks with the next one. Other reminders start counting when the popup appears.
+- **Snooze 10 min** hides the popup and brings it back in 10 minutes; for "keep until Done" reminders the normal interval then starts after you tap Done. **Done** (or the ~8 s timeout) dismisses it.
 
 ## 8. Project layout
 
@@ -139,7 +141,7 @@ Tests/ReminderSchedulerTests.swift   (add to a Unit Testing Bundle target)
 4. **Click-through:** with the popup showing, click on apps behind the transparent area around the
    bubble. Clicks should reach them. Then click **Done** and **Snooze**; both should work on the first click.
 5. Trigger two reminders back to back; the second should wait for the first to leave.
-6. Sleep the Mac past a due time and wake it; each overdue type shows once about a minute later, with no burst.
+6. Sleep the Mac for a while and wake it; nothing should pop up right away, and the countdowns continue where they stopped. Lock the screen or turn the display off and check the same.
 7. Optional: add the unit test target and press Cmd+U.
 
 ## 10. Known limitations
